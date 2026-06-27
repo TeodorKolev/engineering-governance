@@ -18,6 +18,7 @@ Uses GitHub MCP to check PR status and Jira MCP to query sprint state,
 linked tickets, and acceptance criteria. Produces a structured DeliveryPlan.
 """
 
+import os
 from google.adk.agents import LlmAgent
 from google.adk.models import Gemini
 
@@ -27,7 +28,7 @@ from app.tools.jira_tools import get_jira_toolset
 
 delivery_agent = LlmAgent(
     name="delivery_agent",
-    model=Gemini(model="gemini-flash-latest"),
+    model=Gemini(model=os.environ.get("GEMINI_MODEL", "gemini-1.5-flash")),
     mode="task",
     output_schema=DeliveryPlan,
     output_key="delivery_plan",

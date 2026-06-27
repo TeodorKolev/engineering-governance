@@ -18,6 +18,7 @@ Uses GitHub MCP to inspect code structure and AWS MCP to understand
 infrastructure topology. Produces a structured ArchitectureReview.
 """
 
+import os
 from google.adk.agents import LlmAgent
 from google.adk.models import Gemini
 
@@ -27,7 +28,7 @@ from app.tools.github_tools import get_github_toolset
 
 architecture_agent = LlmAgent(
     name="architecture_agent",
-    model=Gemini(model="gemini-flash-latest"),
+    model=Gemini(model=os.environ.get("GEMINI_MODEL", "gemini-1.5-flash")),
     mode="task",
     output_schema=ArchitectureReview,
     output_key="architecture_assessment",

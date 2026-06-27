@@ -18,6 +18,7 @@ Uses GitHub MCP to check CI status, review approvals, and test coverage reports.
 Uses Jira MCP to find open bugs and quality-related tickets. Produces a structured EvaluationReport.
 """
 
+import os
 from google.adk.agents import LlmAgent
 from google.adk.models import Gemini
 
@@ -27,7 +28,7 @@ from app.tools.jira_tools import get_jira_toolset
 
 evaluation_agent = LlmAgent(
     name="evaluation_agent",
-    model=Gemini(model="gemini-flash-latest"),
+    model=Gemini(model=os.environ.get("GEMINI_MODEL", "gemini-1.5-flash")),
     mode="task",
     output_schema=EvaluationReport,
     output_key="evaluation_report",

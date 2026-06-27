@@ -18,6 +18,7 @@ Uses AWS MCP to query current resource costs and project future spend.
 Uses Jira MCP to find budget approval tickets. Produces a structured CostAnalysis.
 """
 
+import os
 from google.adk.agents import LlmAgent
 from google.adk.models import Gemini
 
@@ -27,7 +28,7 @@ from app.tools.jira_tools import get_jira_toolset
 
 cost_agent = LlmAgent(
     name="cost_agent",
-    model=Gemini(model="gemini-flash-latest"),
+    model=Gemini(model=os.environ.get("GEMINI_MODEL", "gemini-1.5-flash")),
     mode="task",
     output_schema=CostAnalysis,
     output_key="cost_analysis",

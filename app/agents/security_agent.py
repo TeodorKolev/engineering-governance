@@ -18,6 +18,7 @@ Uses GitHub MCP to inspect pull request diffs and AWS MCP to evaluate
 infrastructure exposure. Produces a structured SecurityAssessment.
 """
 
+import os
 from google.adk.agents import LlmAgent
 from google.adk.models import Gemini
 
@@ -27,7 +28,7 @@ from app.tools.github_tools import get_github_toolset
 
 security_agent = LlmAgent(
     name="security_agent",
-    model=Gemini(model="gemini-flash-latest"),
+    model=Gemini(model=os.environ.get("GEMINI_MODEL", "gemini-1.5-flash")),
     mode="task",
     output_schema=SecurityAssessment,
     output_key="security_assessment",
