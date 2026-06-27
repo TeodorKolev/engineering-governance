@@ -57,7 +57,7 @@ os.environ.setdefault("GOOGLE_GENAI_USE_VERTEXAI", "True")
 root_agent = LlmAgent(
     name="cto_orchestrator",
     model=Gemini(
-        model=os.environ.get("GEMINI_MODEL", "gemini-1.5-flash"),
+        model=os.environ.get("GEMINI_MODEL", "gemini-3.5-flash"),
         retry_options=types.HttpRetryOptions(attempts=3),
     ),
     description=(

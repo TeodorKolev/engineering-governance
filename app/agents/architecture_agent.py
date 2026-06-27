@@ -28,7 +28,7 @@ from app.tools.github_tools import get_github_toolset
 
 architecture_agent = LlmAgent(
     name="architecture_agent",
-    model=Gemini(model=os.environ.get("GEMINI_MODEL", "gemini-1.5-flash")),
+    model=Gemini(model=os.environ.get("GEMINI_MODEL", "gemini-3.5-flash")),
     mode="task",
     output_schema=ArchitectureReview,
     output_key="architecture_assessment",

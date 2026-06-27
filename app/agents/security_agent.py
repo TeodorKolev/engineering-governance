@@ -28,7 +28,7 @@ from app.tools.github_tools import get_github_toolset
 
 security_agent = LlmAgent(
     name="security_agent",
-    model=Gemini(model=os.environ.get("GEMINI_MODEL", "gemini-1.5-flash")),
+    model=Gemini(model=os.environ.get("GEMINI_MODEL", "gemini-3.5-flash")),
     mode="task",
     output_schema=SecurityAssessment,
     output_key="security_assessment",

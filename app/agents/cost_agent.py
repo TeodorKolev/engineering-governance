@@ -28,7 +28,7 @@ from app.tools.jira_tools import get_jira_toolset
 
 cost_agent = LlmAgent(
     name="cost_agent",
-    model=Gemini(model=os.environ.get("GEMINI_MODEL", "gemini-1.5-flash")),
+    model=Gemini(model=os.environ.get("GEMINI_MODEL", "gemini-3.5-flash")),
     mode="task",
     output_schema=CostAnalysis,
     output_key="cost_analysis",

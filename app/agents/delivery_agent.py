@@ -28,7 +28,7 @@ from app.tools.jira_tools import get_jira_toolset
 
 delivery_agent = LlmAgent(
     name="delivery_agent",
-    model=Gemini(model=os.environ.get("GEMINI_MODEL", "gemini-1.5-flash")),
+    model=Gemini(model=os.environ.get("GEMINI_MODEL", "gemini-3.5-flash")),
     mode="task",
     output_schema=DeliveryPlan,
     output_key="delivery_plan",
