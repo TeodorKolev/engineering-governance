@@ -14,15 +14,35 @@
 
 """AWS MCP toolset factory.
 
+Package : @yawlabs/aws-mcp  (npm verified — 18 tools)
 Requires:
   - Node.js / npx available in the runtime environment (see Dockerfile).
-  - AWS credentials configured via one of:
+  - AWS credentials via one of:
       a) AWS_ACCESS_KEY_ID + AWS_SECRET_ACCESS_KEY + AWS_REGION (env vars)
-      b) Instance profile / Workload Identity (recommended for Cloud Run via Workload Identity Federation)
+      b) Instance profile / Workload Identity Federation (recommended for Cloud Run)
       c) AWS_PROFILE (for local dev with ~/.aws/credentials)
 
-The MCP server used is @aws-sdk/client-mcp-server (official AWS MCP package).
 Alternatively, set use_sse=True and point AWS_MCP_SSE_URL at a hosted server.
+
+IMPORTANT — tool architecture:
+  This MCP server does NOT expose one tool per AWS API call. Instead it exposes
+  generic tools that accept (service, operation, params):
+
+  aws_call(service, operation, params?, query?, region?, profile?)  ← single call
+  aws_paginate(service, operation, params?, maxItems?, startingToken?)  ← paginated
+  aws_resource_*(typeName, identifier?, desiredState?)  ← Cloud Control API
+
+  For example, the equivalent of our original 'describe_instances' is:
+    aws_call(service='ec2', operation='describe-instances')
+  And 'get_cost_and_usage' becomes:
+    aws_call(service='ce', operation='get-cost-and-usage', params={...})
+
+Live tool list (verified 2026-06-27 via MCP tools/list probe):
+  aws_whoami, aws_login_start, aws_login_complete, aws_refresh_if_expiring_soon,
+  aws_session_set, aws_session_get, aws_session_clear,
+  aws_call, aws_list_profiles, aws_paginate, aws_assume_role, aws_logs_tail,
+  aws_resource_get, aws_resource_list, aws_resource_create,
+  aws_resource_update, aws_resource_delete, aws_resource_status
 """
 
 import os
@@ -52,7 +72,7 @@ def get_aws_toolset(use_sse: bool = False) -> McpToolset:
         connection_params = StdioConnectionParams(
             server_params=StdioServerParameters(
                 command="npx",
-                args=["-y", "@aws-sdk/client-mcp-server"],
+                args=["-y", "@yawlabs/aws-mcp"],
                 env={
                     **os.environ,
                     "AWS_REGION": aws_region,
@@ -62,30 +82,28 @@ def get_aws_toolset(use_sse: bool = False) -> McpToolset:
 
     return McpToolset(
         connection_params=connection_params,
+        # tool_filter uses real tool names from @yawlabs/aws-mcp@1.5.3
+        # (verified via MCP tools/list probe on 2026-06-27)
+        # Note: aws_call + aws_paginate replace all per-service tools.
+        # Governance operations map to:
+        #   EC2/VPC: aws_call(service='ec2', operation='describe-instances|describe-security-groups|...')
+        #   S3:      aws_call(service='s3api', operation='list-buckets|get-bucket-policy|...')
+        #   IAM:     aws_call(service='iam', operation='list-roles|get-policy|...')
+        #   Cost:    aws_call(service='ce', operation='get-cost-and-usage|get-cost-forecast')
+        #   CW:      aws_logs_tail(logGroupName=...) or aws_call(service='cloudwatch', ...)
+        #   RDS:     aws_call(service='rds', operation='describe-db-instances|...')
+        #   CCAPI:   aws_resource_get/list for Cloud Control resource reads
         tool_filter=[
-            # EC2 & networking
-            "describe_instances",
-            "describe_security_groups",
-            "describe_vpcs",
-            "describe_subnets",
-            # S3
-            "list_buckets",
-            "get_bucket_policy",
-            "get_bucket_acl",
-            "get_bucket_encryption",
-            # IAM
-            "list_roles",
-            "get_role",
-            "list_policies",
-            "get_policy",
-            # Cost Explorer
-            "get_cost_and_usage",
-            "get_cost_forecast",
-            # CloudWatch
-            "describe_alarms",
-            "get_metric_statistics",
-            # RDS
-            "describe_db_instances",
-            "describe_db_clusters",
+            # Identity & session
+            "aws_whoami",             # Who am I? Useful for verifying credentials
+            "aws_session_get",        # Inspect current session
+            # Core data access
+            "aws_call",               # Generic AWS CLI call: (service, operation, params)
+            "aws_paginate",           # Paginated variant of aws_call
+            # Cloud Control API — read resources via CloudFormation schema
+            "aws_resource_get",       # Read a single resource (e.g. AWS::S3::Bucket)
+            "aws_resource_list",      # List resources of a given type
+            # Observability
+            "aws_logs_tail",          # Tail CloudWatch Logs for a log group
         ],
     )
