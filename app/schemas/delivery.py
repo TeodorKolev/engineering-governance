@@ -27,10 +27,17 @@ class DeliveryRisk(BaseModel):
         "resource_contention",
         "dependency_blocker",
         "scope_creep",
-        "testing_gap",
+        "environment_readiness",
         "rollback_complexity",
         "other",
-    ] = Field(description="Type of delivery risk.")
+    ] = Field(
+        description=(
+            "Type of delivery risk. "
+            "'environment_readiness' covers staging environment gaps, missing feature flags, "
+            "or deployment slot unavailability. "
+            "Note: test coverage gaps are exclusively in EvaluationReport, not here."
+        )
+    )
     description: str = Field(description="Description of the risk.")
     probability: Literal["LOW", "MEDIUM", "HIGH"] = Field(
         description="Probability that this risk materializes."
