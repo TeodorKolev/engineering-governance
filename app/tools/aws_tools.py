@@ -69,10 +69,20 @@ def get_aws_toolset(use_sse: bool = False) -> McpToolset:
         connection_params = SseConnectionParams(url=sse_url)
     else:
         aws_region = os.environ.get("AWS_REGION", "us-east-1")
+        # Resolve local node_modules path to optimize startup latency and avoid NPX registry checks
+        root_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        local_js = os.path.join(root_dir, "node_modules", "@yawlabs", "aws-mcp", "dist", "index.js")
+        if os.path.exists(local_js):
+            command = "node"
+            args = [local_js]
+        else:
+            command = "npx"
+            args = ["-y", "@yawlabs/aws-mcp"]
+
         connection_params = StdioConnectionParams(
             server_params=StdioServerParameters(
-                command="npx",
-                args=["-y", "@yawlabs/aws-mcp"],
+                command=command,
+                args=args,
                 env={
                     **os.environ,
                     "AWS_REGION": aws_region,

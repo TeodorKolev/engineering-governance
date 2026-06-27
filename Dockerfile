@@ -27,7 +27,10 @@ RUN pip install --no-cache-dir uv==0.8.13
 
 WORKDIR /code
 
-COPY ./pyproject.toml ./README.md ./uv.lock* ./
+COPY ./pyproject.toml ./README.md ./uv.lock* ./package.json ./
+
+# Install Node dependencies locally to avoid NPX download latencies in Cloud Run
+RUN npm install --omit=dev
 
 COPY ./app ./app
 

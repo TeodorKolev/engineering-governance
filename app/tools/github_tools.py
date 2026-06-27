@@ -51,13 +51,20 @@ def get_github_toolset(use_sse: bool = False) -> McpToolset:
         connection_params = SseConnectionParams(url=sse_url)
     else:
         github_token = os.environ.get("GITHUB_TOKEN", "")
-        # Token validation is deferred to connection time so that the agent
-        # module can be imported without credentials present (e.g. in tests).
-        # The MCP server will return an auth error if the token is empty.
+        # Resolve local node_modules path to optimize startup latency and avoid NPX registry checks
+        root_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        local_js = os.path.join(root_dir, "node_modules", "@modelcontextprotocol", "server-github", "dist", "index.js")
+        if os.path.exists(local_js):
+            command = "node"
+            args = [local_js]
+        else:
+            command = "npx"
+            args = ["-y", "@modelcontextprotocol/server-github"]
+
         connection_params = StdioConnectionParams(
             server_params=StdioServerParameters(
-                command="npx",
-                args=["-y", "@modelcontextprotocol/server-github"],
+                command=command,
+                args=args,
                 env={
                     **os.environ,
                     "GITHUB_PERSONAL_ACCESS_TOKEN": github_token,

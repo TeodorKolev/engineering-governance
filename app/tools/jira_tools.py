@@ -58,13 +58,20 @@ def get_jira_toolset(use_sse: bool = False) -> McpToolset:
         jira_url      = os.environ.get("JIRA_URL", "")
         jira_api_mail = os.environ.get("JIRA_API_MAIL", "")
         jira_api_key  = os.environ.get("JIRA_API_KEY", "")
-        # Credential validation is deferred to connection time so that the
-        # agent module can be imported without credentials set (e.g. in tests).
-        # Note: env var names are JIRA_API_MAIL and JIRA_API_KEY (not USERNAME/TOKEN).
+        # Resolve local node_modules path to optimize startup latency and avoid NPX registry checks
+        root_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        local_js = os.path.join(root_dir, "node_modules", "@mcp-devtools", "jira", "build", "index.js")
+        if os.path.exists(local_js):
+            command = "node"
+            args = [local_js]
+        else:
+            command = "npx"
+            args = ["-y", "@mcp-devtools/jira"]
+
         connection_params = StdioConnectionParams(
             server_params=StdioServerParameters(
-                command="npx",
-                args=["-y", "@mcp-devtools/jira"],
+                command=command,
+                args=args,
                 env={
                     **os.environ,
                     "JIRA_URL":      jira_url,
