@@ -25,13 +25,14 @@ the orchestrator pauses via request_input before finalising the decision.
 
 import os
 from dotenv import load_dotenv
+from typing import Optional
 
 # Load .env from root or app/ directory
 load_dotenv()
 load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
 
 import google.auth
-from google.adk.agents import LlmAgent
+from google.adk.agents import LlmAgent, ParallelAgent, SequentialAgent
 from google.adk.apps import App, ResumabilityConfig
 from google.adk.models import Gemini
 from google.adk.tools import request_input
@@ -65,45 +66,134 @@ except google.auth.exceptions.DefaultCredentialsError:
 os.environ.setdefault("GOOGLE_CLOUD_LOCATION", "global")
 os.environ.setdefault("GOOGLE_GENAI_USE_VERTEXAI", "True")
 
-root_agent = LlmAgent(
-    name="cto_orchestrator",
+async def save_original_input(callback_context) -> Optional[types.Content]:
+    """Save the initial user request text to the state.
+    
+    If the request is a general chat message and not a change request, 
+    populate default empty assessments in the state and skip parallel execution.
+    """
+    if callback_context.user_content and callback_context.user_content.parts:
+        text = "\n".join(part.text for part in callback_context.user_content.parts if part.text)
+        callback_context.state["temp:original_input"] = text
+        
+        # Check if this looks like a governance/change review request
+        is_change_request = any(
+            keyword in text.lower()
+            for keyword in ["pr", "pull", "github", "jira", "eng-", "aws", "commit", "review", "change", "architecture", "deploy"]
+        )
+        if not is_change_request:
+            from app.schemas.security import SecurityAssessment
+            from app.schemas.architecture import ArchitectureReview
+            from app.schemas.delivery import DeliveryPlan
+            from app.schemas.cost import CostAnalysis
+            from app.schemas.evaluation import EvaluationReport
+
+            callback_context.state["security_assessment"] = SecurityAssessment(
+                overall_risk="LOW",
+                findings=[],
+                requires_human_approval=False,
+                recommendation="Skipped: General chat query."
+            ).model_dump()
+            callback_context.state["architecture_assessment"] = ArchitectureReview(
+                overall_assessment="APPROVED",
+                design_pattern_alignment="Aligned",
+                scalability_assessment="No scalability impact",
+                concerns=[],
+                requires_human_approval=False,
+                recommendation="Skipped: General chat query."
+            ).model_dump()
+            callback_context.state["delivery_plan"] = DeliveryPlan(
+                delivery_feasibility="ON_TRACK",
+                risks=[],
+                requires_human_approval=False,
+                rollback_plan="N/A",
+                jira_tickets=[],
+                recommendation="Skipped: General chat query."
+            ).model_dump()
+            callback_context.state["cost_analysis"] = CostAnalysis(
+                cost_impact_level="NEGLIGIBLE",
+                total_monthly_delta_usd=0.0,
+                budget_available=True,
+                resource_impacts=[],
+                requires_human_approval=False,
+                recommendation="Skipped: General chat query."
+            ).model_dump()
+            callback_context.state["evaluation_report"] = EvaluationReport(
+                quality_gate="PASS",
+                code_review_status="APPROVED",
+                ci_pipeline_status="PASSING",
+                open_bugs_count=0,
+                test_coverage_gaps=[],
+                regression_risk="LOW",
+                requires_human_approval=False,
+                recommendation="Skipped: General chat query."
+            ).model_dump()
+            # Returning a Content object skips the execution of this agent/node
+            return types.Content(role="model", parts=[types.Part.from_text(text="Skipping specialist reviews for general query.")])
+    return None
+
+async def post_process_decision(callback_context) -> None:
+    """Inject the raw structured reports from the sub-agents into the final synthesized decision."""
+    decision = callback_context.state.get("governance_decision")
+    if decision:
+        security = callback_context.state.get("security_assessment")
+        architecture = callback_context.state.get("architecture_assessment")
+        delivery = callback_context.state.get("delivery_plan")
+        cost = callback_context.state.get("cost_analysis")
+        evaluation = callback_context.state.get("evaluation_report")
+
+        def to_dict(val):
+            if hasattr(val, "model_dump"):
+                return val.model_dump()
+            elif hasattr(val, "dict"):
+                return val.dict()
+            return val
+
+        reports = {}
+        if security:
+            reports["security_agent"] = to_dict(security)
+        if architecture:
+            reports["architecture_agent"] = to_dict(architecture)
+        if delivery:
+            reports["delivery_agent"] = to_dict(delivery)
+        if cost:
+            reports["cost_agent"] = to_dict(cost)
+        if evaluation:
+            reports["evaluation_agent"] = to_dict(evaluation)
+
+        if hasattr(decision, "sub_agent_reports"):
+            decision.sub_agent_reports = reports
+        elif isinstance(decision, dict):
+            decision["sub_agent_reports"] = reports
+
+cto_synthesizer = LlmAgent(
+    name="cto_synthesizer",
     model=Gemini(
         model=os.environ.get("GEMINI_MODEL", "gemini-3.5-flash"),
         retry_options=types.HttpRetryOptions(attempts=6),
     ),
     description=(
-        "CTO Orchestrator Agent for Engineering Governance. Accepts engineering change "
-        "requests (PR URLs, Jira tickets, architecture proposals, infrastructure changes) "
-        "and coordinates specialist reviews to produce an authoritative GovernanceDecision."
+        "CTO Synthesizer Agent for Engineering Governance. Synthesizes specialist reviews "
+        "into a final authoritative GovernanceDecision."
     ),
     instruction="""You are the Chief Technology Officer AI for an engineering governance platform.
 
-Your role: receive engineering change requests and orchestrate a thorough multi-dimensional review by delegating to your specialist sub-agents. Produce a final, authoritative GovernanceDecision.
+Your role: review the assessments provided by your five specialist sub-agents (which have run in parallel) and synthesize them into a final, authoritative GovernanceDecision.
 
-## Input format
+## Specialist Assessments
 
-Accept any of:
-- GitHub PR URL (e.g. https://github.com/org/repo/pull/123)
-- Jira ticket key (e.g. ENG-1234)
-- Free-text description of a change or architectural proposal
-- Or a combination of the above
+The reviews from the sub-agents are:
+- Security Assessment: {security_assessment}
+- Architecture Assessment: {architecture_assessment}
+- Delivery Plan: {delivery_plan}
+- Cost Analysis: {cost_analysis}
+- Evaluation Report: {evaluation_report}
 
-## Orchestration process
+Original change request description: {temp:original_input}
 
-Delegate to ALL FIVE sub-agents by calling their respective tools.
-IMPORTANT: Call these tools SEQUENTIALLY, one by one. Do NOT call multiple sub-agent tools in parallel.
-Provide each agent with the full context from the user's input:
-- `security_agent`: Pass the full change description. Ask for a complete SecurityAssessment.
-- `architecture_agent`: Pass the full change description. Ask for a complete ArchitectureReview.
-- `delivery_agent`: Pass the full change description. Ask for a complete DeliveryPlan.
-- `cost_agent`: Pass the full change description. Ask for a complete CostAnalysis.
-- `evaluation_agent`: Pass the full change description. Ask for a complete EvaluationReport.
+## Step 2 — Assess human approval requirement
 
-Do NOT skip any agent. Even if a domain seems less relevant, always gather all five perspectives.
-
-### Step 2 — Assess human approval requirement
-
-After receiving all five reports, check: does ANY report have `requires_human_approval = True`?
+After reviewing the five reports, check: does ANY report have `requires_human_approval = True`?
 
 If YES → you MUST call `request_input` with:
 ```
@@ -117,9 +207,9 @@ Wait for the human response before proceeding. Parse their response to extract:
 
 If NO → proceed directly to Step 3.
 
-### Step 3 — Synthesise and output GovernanceDecision
+## Step 3 — Synthesise and output GovernanceDecision
 
-#### 3a. Risk-level normalisation (cross-agent)
+### 3a. Risk-level normalisation (cross-agent)
 
 Normalise every agent's severity field to the shared 4-level scale before comparing:
 
@@ -146,7 +236,7 @@ Normalise every agent's severity field to the shared 4-level scale before compar
 
 Set `risk_level` = maximum of all six normalised values above (CRITICAL > HIGH > MEDIUM > LOW).
 
-#### 3b. Recommendation selection rules (strict priority order — stop at first match)
+### 3b. Recommendation selection rules (strict priority order — stop at first match)
 
 Apply these rules in order. The first rule that matches sets `overall_recommendation`:
 
@@ -170,7 +260,7 @@ Apply these rules in order. The first rule that matches sets `overall_recommenda
    - None of the above rules matched
    - All normalised risk levels are LOW or MEDIUM
 
-#### 3c. Conflict resolution between agents
+### 3c. Conflict resolution between agents
 
 When two agents produce contradictory signals, apply these tie-breaker rules:
 
@@ -182,7 +272,7 @@ When two agents produce contradictory signals, apply these tie-breaker rules:
 | Delivery=BLOCKED but Security+Arch both APPROVE | BLOCKED triggers DEFER (can't ship safely anyway) |
 | Human says APPROVE but Security=CRITICAL | Security CRITICAL is non-overridable → REJECT (note override attempt in human_approval_notes) |
 
-#### 3d. GovernanceDecision output
+### 3d. GovernanceDecision output
 
 Produce the final GovernanceDecision:
 - `decision_id`: format `GOV-YYYYMMDD-<slug>` (slug = 2-4 word kebab-case of the change)
@@ -190,7 +280,7 @@ Produce the final GovernanceDecision:
 - `overall_recommendation`: result of Step 3b
 - `risk_level`: result of Step 3a
 - `conditions`: concrete, verifiable conditions (only for APPROVE_WITH_CONDITIONS)
-- `sub_agent_reports`: raw structured output from each specialist, keyed by agent name
+- `sub_agent_reports`: raw structured output from each specialist (will be automatically post-processed and filled)
 - `security_summary` / `architecture_summary` / `delivery_summary` / `cost_summary` / `evaluation_summary`: one sentence each, citing specific findings
 - `human_approval_required`: True if any agent's requires_human_approval was True
 - `human_approved_by` / `human_approval_notes`: populated from Step 2 response if HITL fired
@@ -199,6 +289,14 @@ Produce the final GovernanceDecision:
 - Be decisive. Governance exists to make decisions, not to defer everything.
 - Be specific. Reference actual agent findings by name and severity.
 - Be actionable. Every condition must be concrete and verifiable (not "fix security issues").""",
+    tools=[request_input],
+    output_schema=GovernanceDecision,
+    output_key="governance_decision",
+    after_agent_callback=post_process_decision,
+)
+
+specialist_reviewers = ParallelAgent(
+    name="specialist_reviewers",
     sub_agents=[
         security_agent,
         architecture_agent,
@@ -206,9 +304,15 @@ Produce the final GovernanceDecision:
         cost_agent,
         evaluation_agent,
     ],
-    tools=[request_input],
-    output_schema=GovernanceDecision,
-    output_key="governance_decision",
+    before_agent_callback=save_original_input,
+)
+
+root_agent = SequentialAgent(
+    name="cto_orchestrator",
+    sub_agents=[
+        specialist_reviewers,
+        cto_synthesizer,
+    ],
 )
 
 app = App(
