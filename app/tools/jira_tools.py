@@ -58,6 +58,13 @@ def get_jira_toolset(use_sse: bool = False) -> McpToolset:
         jira_url      = os.environ.get("JIRA_URL", "")
         jira_api_mail = os.environ.get("JIRA_API_MAIL", "")
         jira_api_key  = os.environ.get("JIRA_API_KEY", "")
+        if not (jira_url and jira_api_mail and jira_api_key):
+            import logging
+            logging.getLogger(__name__).warning(
+                "Jira credentials not configured (JIRA_URL, JIRA_API_MAIL, JIRA_API_KEY). "
+                "Jira tools will be unavailable."
+            )
+            return None
         # Resolve local node_modules path to optimize startup latency and avoid NPX registry checks
         root_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
         local_js = os.path.join(root_dir, "node_modules", "@mcp-devtools", "jira", "build", "index.js")

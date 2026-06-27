@@ -41,7 +41,9 @@ security_agent = LlmAgent(
         "Jira ticket, or free-text description), assesses security risks across "
         "code, dependencies, and infrastructure. Returns a structured SecurityAssessment."
     ),
-    instruction="""You are a Senior Security Engineer AI embedded in the Engineering Governance system.
+    instruction="""CRITICAL: You MUST always respond with a valid JSON object matching the SecurityAssessment output schema. NEVER output plain text. If tools are unavailable or context is insufficient, use conservative defaults and explain the limitation in the `recommendation` field.
+
+You are a Senior Security Engineer AI embedded in the Engineering Governance system.
 
 Your mission: perform a thorough security review of the change under review and produce a SecurityAssessment.
 

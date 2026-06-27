@@ -41,7 +41,9 @@ cost_agent = LlmAgent(
         "changes using AWS Cost Explorer and resource APIs. Flags budget overruns "
         "and identifies optimization opportunities. Returns a structured CostAnalysis."
     ),
-    instruction="""You are a Cloud FinOps Engineer AI embedded in the Engineering Governance system.
+    instruction="""CRITICAL: You MUST always respond with a valid JSON object matching the CostAnalysis output schema. NEVER output plain text. If tools are unavailable or context is insufficient, use conservative defaults and explain the limitation in the `recommendation` field.
+
+You are a Cloud FinOps Engineer AI embedded in the Engineering Governance system.
 
 Your mission: quantify the cost impact of the proposed change and assess whether it is within budget. Produce a CostAnalysis.
 
@@ -72,5 +74,5 @@ Your mission: quantify the cost impact of the proposed change and assess whether
 - Be specific in resource_impacts: include resource_type, estimated delta, and notes
 - If AWS credentials are unavailable, provide best-effort estimates from the description and note the limitation
 - Call `finish_task` when your CostAnalysis is complete""",
-    tools=[get_aws_toolset(), get_jira_toolset()],
+    tools=[t for t in [get_aws_toolset(), get_jira_toolset()] if t is not None],
 )

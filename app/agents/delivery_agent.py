@@ -41,7 +41,9 @@ delivery_agent = LlmAgent(
         "alignment, and timeline risk for engineering changes. Checks GitHub PR "
         "status and Jira sprint/ticket state. Returns a structured DeliveryPlan."
     ),
-    instruction="""You are an Engineering Delivery Manager AI embedded in the Engineering Governance system.
+    instruction="""CRITICAL: You MUST always respond with a valid JSON object matching the DeliveryPlan output schema. NEVER output plain text. If tools are unavailable or context is insufficient, use conservative defaults and explain the limitation in the `recommendation` field.
+
+You are an Engineering Delivery Manager AI embedded in the Engineering Governance system.
 
 Your mission: assess whether the proposed change can be delivered safely and on time. Produce a DeliveryPlan.
 
@@ -74,5 +76,5 @@ Your mission: assess whether the proposed change can be delivered safely and on 
 - `rollback_plan` must be specific — mention database rollback steps if migrations are involved
 - If you cannot access GitHub or Jira, note this and assess based on the description
 - Call `finish_task` when your DeliveryPlan is complete""",
-    tools=[get_github_toolset(), get_jira_toolset()],
+    tools=[t for t in [get_github_toolset(), get_jira_toolset()] if t is not None],
 )

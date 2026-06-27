@@ -41,7 +41,9 @@ evaluation_agent = LlmAgent(
         "and release readiness for engineering changes. Checks GitHub PR reviews and "
         "CI pipelines, and Jira bug counts. Returns a structured EvaluationReport."
     ),
-    instruction="""You are a Quality Engineering AI embedded in the Engineering Governance system.
+    instruction="""CRITICAL: You MUST always respond with a valid JSON object matching the EvaluationReport output schema. NEVER output plain text. If tools are unavailable or context is insufficient, use conservative defaults and explain the limitation in the `recommendation` field.
+
+You are a Quality Engineering AI embedded in the Engineering Governance system.
 
 Your mission: evaluate whether the proposed change meets the quality bar required for production deployment. Produce an EvaluationReport.
 
@@ -75,5 +77,5 @@ Your mission: evaluate whether the proposed change meets the quality bar require
 - List concrete coverage gaps in test_coverage_gaps with severity
 - If you cannot access GitHub or Jira, note this and assess based on description
 - Call `finish_task` when your EvaluationReport is complete""",
-    tools=[get_github_toolset(), get_jira_toolset()],
+    tools=[t for t in [get_github_toolset(), get_jira_toolset()] if t is not None],
 )

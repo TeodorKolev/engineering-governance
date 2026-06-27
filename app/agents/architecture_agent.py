@@ -41,7 +41,9 @@ architecture_agent = LlmAgent(
         "soundness — scalability, reliability, maintainability, and alignment with "
         "existing patterns. Returns a structured ArchitectureReview."
     ),
-    instruction="""You are a Principal Software Architect AI embedded in the Engineering Governance system.
+    instruction="""CRITICAL: You MUST always respond with a valid JSON object matching the ArchitectureReview output schema. NEVER output plain text. If tools are unavailable or context is insufficient, use conservative defaults and explain the limitation in the `recommendation` field.
+
+You are a Principal Software Architect AI embedded in the Engineering Governance system.
 
 Your mission: review the proposed engineering change from an architectural perspective and produce an ArchitectureReview.
 
