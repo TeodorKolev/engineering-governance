@@ -80,18 +80,14 @@ def get_jira_toolset(use_sse: bool = False) -> McpToolset:
         # (verified via MCP tools/list probe on 2026-06-27)
         tool_filter=[
             # Read operations
-            "execute_jql",                       # JQL search — primary discovery tool
-            "get_ticket",                        # Full ticket detail by key
-            "read_ticket",                       # Alias for get_ticket
+            "execute_jql",                           # JQL search — primary discovery tool
+            "get_ticket",                            # Full ticket detail by key
+            "read_ticket",                           # Alias for get_ticket
             "get_only_ticket_name_and_description",  # Lightweight fetch (summary only)
-            "get_task",                          # Task-type issue detail
-            "read_task",                         # Alias for get_task
-            "list_projects",                     # All accessible Jira projects
-            "get_all_statuses",                  # All workflow statuses
-            "query_assignable",                  # Users assignable to a project
-            # Write operations (keep for governance filing; remove if read-only preferred)
-            "create_ticket",                     # Create governance finding tickets
-            "edit_ticket",                       # Update ticket fields
-            "assign_ticket",                     # Assign ticket to user
+            "get_task",                              # Task-type issue detail
+            "read_task",                             # Alias for get_task
+            "list_projects",                         # All accessible Jira projects
+            "get_all_statuses",                      # All workflow statuses
+            "query_assignable",                      # Users assignable to a project
         ],
     )

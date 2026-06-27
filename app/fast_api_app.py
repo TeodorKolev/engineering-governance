@@ -17,14 +17,24 @@ import google.auth
 from fastapi import FastAPI
 from google.adk.cli.fast_api import get_fast_api_app
 from google.cloud import logging as google_cloud_logging
+from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 
 from app.app_utils.telemetry import setup_telemetry
 from app.app_utils.typing import Feedback
 
 setup_telemetry()
-_, project_id = google.auth.default()
-logging_client = google_cloud_logging.Client()
-logger = logging_client.logger(__name__)
+
+# Setup logging with fallback to standard Python logging if ADC is missing
+try:
+    _, project_id = google.auth.default()
+    logging_client = google_cloud_logging.Client()
+    logger = logging_client.logger(__name__)
+    has_gcp_logger = True
+except google.auth.exceptions.DefaultCredentialsError:
+    import logging
+    logger = logging.getLogger(__name__)
+    has_gcp_logger = False
+
 allow_origins = (
     os.getenv("ALLOW_ORIGINS", "").split(",") if os.getenv("ALLOW_ORIGINS") else None
 )
@@ -44,10 +54,14 @@ app: FastAPI = get_fast_api_app(
     artifact_service_uri=artifact_service_uri,
     allow_origins=allow_origins,
     session_service_uri=session_service_uri,
-    otel_to_cloud=True,
+    otel_to_cloud=has_gcp_logger,
 )
 app.title = "eng-governance"
 app.description = "API for interacting with the Agent eng-governance"
+
+# Instrument FastAPI endpoints with OpenTelemetry tracing
+FastAPIInstrumentor.instrument_app(app)
+
 
 
 @app.post("/feedback")
@@ -60,7 +74,10 @@ def collect_feedback(feedback: Feedback) -> dict[str, str]:
     Returns:
         Success message
     """
-    logger.log_struct(feedback.model_dump(), severity="INFO")
+    if has_gcp_logger:
+        logger.log_struct(feedback.model_dump(), severity="INFO")
+    else:
+        logger.info(f"Feedback received: {feedback.model_dump()}")
     return {"status": "success"}
 
 
