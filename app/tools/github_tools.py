@@ -42,8 +42,8 @@ def get_github_toolset(use_sse: bool = False) -> McpToolset:
     Returns:
         McpToolset configured for GitHub operations.
     """
-    if use_sse:
-        sse_url = os.environ.get("GITHUB_MCP_SSE_URL", "")
+    sse_url = os.environ.get("GITHUB_MCP_SSE_URL", "")
+    if use_sse or sse_url:
         if not sse_url:
             raise ValueError(
                 "GITHUB_MCP_SSE_URL must be set when use_sse=True"

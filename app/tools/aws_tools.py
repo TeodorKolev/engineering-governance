@@ -62,8 +62,8 @@ def get_aws_toolset(use_sse: bool = False) -> McpToolset:
     Returns:
         McpToolset configured for AWS resource operations.
     """
-    if use_sse:
-        sse_url = os.environ.get("AWS_MCP_SSE_URL", "")
+    sse_url = os.environ.get("AWS_MCP_SSE_URL", "")
+    if use_sse or sse_url:
         if not sse_url:
             raise ValueError("AWS_MCP_SSE_URL must be set when use_sse=True")
         connection_params = SseConnectionParams(url=sse_url)
