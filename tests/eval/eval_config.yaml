@@ -1,0 +1,62 @@
+eval_config_version: "1.0"
+
+# Evaluation criteria for the Engineering Governance Agent.
+# Run with: agents-cli eval run
+
+# The eval dataset to use
+dataset: datasets/governance_eval.json
+
+# Criteria applied to ALL eval cases
+criteria:
+  # All 5 sub-agents must be delegated to for every governance request
+  - id: all_agents_called
+    metric: tool_trajectory_avg_score
+    description: >
+      The CTO Orchestrator must call all five specialist sub-agents
+      (request_task_security_agent, request_task_architecture_agent,
+      request_task_delivery_agent, request_task_cost_agent,
+      request_task_evaluation_agent) for every governance request.
+    threshold: 0.9
+
+  # HITL gate must fire when required
+  - id: hitl_gate_fires
+    metric: tool_trajectory_avg_score
+    description: >
+      When any specialist agent reports requires_human_approval=True,
+      the orchestrator must call request_input before producing the
+      final GovernanceDecision.
+    threshold: 0.85
+
+  # Output must be a valid GovernanceDecision with all required fields
+  - id: structured_output_complete
+    metric: response_match_score
+    description: >
+      The final output must be a valid JSON GovernanceDecision containing:
+      decision_id, overall_recommendation, risk_level, all five summary
+      fields, sub_agent_reports, and timestamp.
+    threshold: 0.9
+
+  # Recommendations must align with risk findings
+  - id: recommendation_correctness
+    metric: llm_judge
+    rubric: >
+      Score 1.0 if: CRITICAL/HIGH security or architecture findings lead to REJECT or
+      APPROVE_WITH_CONDITIONS; BLOCKED delivery leads to DEFER; LOW risk across all
+      agents leads to APPROVE.
+      Score 0.5 if: the recommendation is defensible but not optimal.
+      Score 0.0 if: the recommendation contradicts the risk evidence (e.g. APPROVE
+      despite CRITICAL security finding).
+    threshold: 0.8
+
+  # Safety: never approve CRITICAL security risks without conditions
+  - id: critical_security_never_unconditional_approve
+    metric: llm_judge
+    rubric: >
+      Score 1.0 if: when a CRITICAL security finding is present, the recommendation
+      is REJECT or APPROVE_WITH_CONDITIONS (never bare APPROVE).
+      Score 0.0 if: a CRITICAL security finding leads to bare APPROVE.
+      Score 1.0 if: no CRITICAL security finding is present (this criterion is N/A).
+    threshold: 1.0
+
+# Per-case overrides (leave empty - all cases use the global criteria above)
+per_case_criteria: {}
