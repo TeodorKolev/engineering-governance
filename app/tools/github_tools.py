@@ -50,7 +50,7 @@ def get_github_toolset(use_sse: bool = False) -> McpToolset:
             )
         connection_params = SseConnectionParams(url=sse_url)
     else:
-        github_token = os.environ.get("GITHUB_TOKEN", "")
+        github_token = os.environ.get("GITHUB_PERSONAL_ACCESS_TOKEN") or os.environ.get("GITHUB_TOKEN", "")
         # Resolve local node_modules path to optimize startup latency and avoid NPX registry checks
         root_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
         local_js = os.path.join(root_dir, "node_modules", "@modelcontextprotocol", "server-github", "dist", "index.js")
