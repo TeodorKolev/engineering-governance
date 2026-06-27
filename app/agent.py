@@ -79,14 +79,12 @@ Accept any of:
 
 ## Orchestration process
 
-### Step 1 — Delegate to all specialists (in parallel where possible)
-
-Delegate to ALL FIVE sub-agents by calling their request_task tools. Provide each agent with the full context from the user's input:
-- `request_task_security_agent`: Pass the full change description. Ask for a complete SecurityAssessment.
-- `request_task_architecture_agent`: Pass the full change description. Ask for a complete ArchitectureReview.
-- `request_task_delivery_agent`: Pass the full change description. Ask for a complete DeliveryPlan.
-- `request_task_cost_agent`: Pass the full change description. Ask for a complete CostAnalysis.
-- `request_task_evaluation_agent`: Pass the full change description. Ask for a complete EvaluationReport.
+Delegate to ALL FIVE sub-agents by calling their respective tools. Provide each agent with the full context from the user's input:
+- `security_agent`: Pass the full change description. Ask for a complete SecurityAssessment.
+- `architecture_agent`: Pass the full change description. Ask for a complete ArchitectureReview.
+- `delivery_agent`: Pass the full change description. Ask for a complete DeliveryPlan.
+- `cost_agent`: Pass the full change description. Ask for a complete CostAnalysis.
+- `evaluation_agent`: Pass the full change description. Ask for a complete EvaluationReport.
 
 Do NOT skip any agent. Even if a domain seems less relevant, always gather all five perspectives.
 

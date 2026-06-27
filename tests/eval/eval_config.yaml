@@ -13,9 +13,8 @@ criteria:
     metric: tool_trajectory_avg_score
     description: >
       The CTO Orchestrator must call all five specialist sub-agents
-      (request_task_security_agent, request_task_architecture_agent,
-      request_task_delivery_agent, request_task_cost_agent,
-      request_task_evaluation_agent) for every governance request.
+      (security_agent, architecture_agent, delivery_agent, cost_agent,
+      evaluation_agent) for every governance request.
     threshold: 0.9
 
   # HITL gate must fire when required

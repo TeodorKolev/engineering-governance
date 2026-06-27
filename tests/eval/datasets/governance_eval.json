@@ -3,11 +3,11 @@
     "name": "low_risk_pr_approve",
     "query": "Please review this engineering change: We're updating the README.md and adding a docstring to the UserService.get_user() method in our auth service. PR: https://github.com/acme/auth-service/pull/42. Jira: ENG-101.",
     "expected_tool_use": [
-      {"tool_name": "request_task_security_agent"},
-      {"tool_name": "request_task_architecture_agent"},
-      {"tool_name": "request_task_delivery_agent"},
-      {"tool_name": "request_task_cost_agent"},
-      {"tool_name": "request_task_evaluation_agent"}
+      {"tool_name": "security_agent"},
+      {"tool_name": "architecture_agent"},
+      {"tool_name": "delivery_agent"},
+      {"tool_name": "cost_agent"},
+      {"tool_name": "evaluation_agent"}
     ],
     "reference": "The CTO Orchestrator should call all 5 sub-agents, and the final GovernanceDecision should have overall_recommendation=APPROVE or APPROVE_WITH_CONDITIONS, risk_level=LOW or MEDIUM, and human_approval_required=False. All five sub-agent summaries should be populated in the response."
   },
@@ -15,11 +15,11 @@
     "name": "critical_security_reject",
     "query": "Review this infrastructure change: We are making our main S3 bucket (prod-customer-data) publicly accessible by adding an s3:GetObject policy for '*'. This will allow our CDN to serve files directly. PR: https://github.com/acme/infra/pull/99. Jira: ENG-555.",
     "expected_tool_use": [
-      {"tool_name": "request_task_security_agent"},
-      {"tool_name": "request_task_architecture_agent"},
-      {"tool_name": "request_task_delivery_agent"},
-      {"tool_name": "request_task_cost_agent"},
-      {"tool_name": "request_task_evaluation_agent"},
+      {"tool_name": "security_agent"},
+      {"tool_name": "architecture_agent"},
+      {"tool_name": "delivery_agent"},
+      {"tool_name": "cost_agent"},
+      {"tool_name": "evaluation_agent"},
       {"tool_name": "request_input"}
     ],
     "reference": "The security_agent should identify a CRITICAL finding (public S3 bucket with customer data). The CTO Orchestrator must call request_input for human approval before finalizing. The final GovernanceDecision should have overall_recommendation=REJECT or APPROVE_WITH_CONDITIONS (with condition to restrict bucket access), risk_level=CRITICAL, and human_approval_required=True."
@@ -28,11 +28,11 @@
     "name": "high_cost_impact_defer",
     "query": "We want to upgrade our RDS PostgreSQL fleet from db.t3.micro (4 instances) to db.r6g.4xlarge to handle projected 10x traffic growth for the holiday season. Estimated cost impact is unknown. Jira: ENG-789.",
     "expected_tool_use": [
-      {"tool_name": "request_task_security_agent"},
-      {"tool_name": "request_task_architecture_agent"},
-      {"tool_name": "request_task_delivery_agent"},
-      {"tool_name": "request_task_cost_agent"},
-      {"tool_name": "request_task_evaluation_agent"},
+      {"tool_name": "security_agent"},
+      {"tool_name": "architecture_agent"},
+      {"tool_name": "delivery_agent"},
+      {"tool_name": "cost_agent"},
+      {"tool_name": "evaluation_agent"},
       {"tool_name": "request_input"}
     ],
     "reference": "The cost_agent should identify HIGH or CRITICAL cost impact (db.r6g.4xlarge is significantly more expensive than db.t3.micro). human_approval_required should be True. The orchestrator must call request_input. Final overall_recommendation should be APPROVE_WITH_CONDITIONS or DEFER, with conditions around budget approval and phased rollout."
@@ -41,11 +41,11 @@
     "name": "blocked_delivery_defer",
     "query": "We want to merge PR https://github.com/acme/payment-service/pull/201 which adds Stripe webhooks. The CI is failing due to a flaky integration test. The PR has 1 approval but 1 reviewer requested changes. Sprint ends in 2 days. Jira: PAY-123.",
     "expected_tool_use": [
-      {"tool_name": "request_task_security_agent"},
-      {"tool_name": "request_task_architecture_agent"},
-      {"tool_name": "request_task_delivery_agent"},
-      {"tool_name": "request_task_cost_agent"},
-      {"tool_name": "request_task_evaluation_agent"},
+      {"tool_name": "security_agent"},
+      {"tool_name": "architecture_agent"},
+      {"tool_name": "delivery_agent"},
+      {"tool_name": "cost_agent"},
+      {"tool_name": "evaluation_agent"},
       {"tool_name": "request_input"}
     ],
     "reference": "The delivery_agent should set delivery_feasibility=BLOCKED or AT_RISK. The evaluation_agent should set quality_gate=FAIL or CONDITIONAL_PASS and code_review_status=CHANGES_REQUESTED, ci_pipeline_status=FAILING. human_approval_required should be True. Final recommendation should be DEFER or APPROVE_WITH_CONDITIONS with conditions to fix CI and resolve review."
@@ -54,11 +54,11 @@
     "name": "architecture_needs_rework",
     "query": "We're adding a new feature to our monolith that directly accesses the Users database table from the Orders service code (bypassing the Users service API). The change adds 3 direct SQL queries in the orders controller. PR: https://github.com/acme/monolith/pull/315. Jira: ENG-920.",
     "expected_tool_use": [
-      {"tool_name": "request_task_security_agent"},
-      {"tool_name": "request_task_architecture_agent"},
-      {"tool_name": "request_task_delivery_agent"},
-      {"tool_name": "request_task_cost_agent"},
-      {"tool_name": "request_task_evaluation_agent"},
+      {"tool_name": "security_agent"},
+      {"tool_name": "architecture_agent"},
+      {"tool_name": "delivery_agent"},
+      {"tool_name": "cost_agent"},
+      {"tool_name": "evaluation_agent"},
       {"tool_name": "request_input"}
     ],
     "reference": "The architecture_agent should identify a HIGH severity concern (cross-service direct DB access violates service boundaries). overall_assessment should be NEEDS_REWORK. human_approval_required should be True. The orchestrator must call request_input. Final recommendation should be REJECT or APPROVE_WITH_CONDITIONS requiring refactoring to use the Users service API."
