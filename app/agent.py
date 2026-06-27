@@ -24,6 +24,11 @@ the orchestrator pauses via request_input before finalising the decision.
 """
 
 import os
+from dotenv import load_dotenv
+
+# Load .env from root or app/ directory
+load_dotenv()
+load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
 
 import google.auth
 from google.adk.agents import LlmAgent
