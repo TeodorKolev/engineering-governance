@@ -22,13 +22,17 @@ import os
 from google.adk.agents import LlmAgent
 from google.adk.models import Gemini
 
+from google.genai import types
 from app.schemas.security import SecurityAssessment
 from app.tools.aws_tools import get_aws_toolset
 from app.tools.github_tools import get_github_toolset
 
 security_agent = LlmAgent(
     name="security_agent",
-    model=Gemini(model=os.environ.get("GEMINI_MODEL", "gemini-3.5-flash")),
+    model=Gemini(
+        model=os.environ.get("GEMINI_MODEL", "gemini-3.5-flash"),
+        retry_options=types.HttpRetryOptions(attempts=6),
+    ),
     mode="task",
     output_schema=SecurityAssessment,
     output_key="security_assessment",

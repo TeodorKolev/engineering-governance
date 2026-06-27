@@ -22,13 +22,17 @@ import os
 from google.adk.agents import LlmAgent
 from google.adk.models import Gemini
 
+from google.genai import types
 from app.schemas.cost import CostAnalysis
 from app.tools.aws_tools import get_aws_toolset
 from app.tools.jira_tools import get_jira_toolset
 
 cost_agent = LlmAgent(
     name="cost_agent",
-    model=Gemini(model=os.environ.get("GEMINI_MODEL", "gemini-3.5-flash")),
+    model=Gemini(
+        model=os.environ.get("GEMINI_MODEL", "gemini-3.5-flash"),
+        retry_options=types.HttpRetryOptions(attempts=6),
+    ),
     mode="task",
     output_schema=CostAnalysis,
     output_key="cost_analysis",

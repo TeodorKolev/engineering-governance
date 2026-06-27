@@ -46,6 +46,17 @@ from app.agents import (
 )
 from app.schemas.governance import GovernanceDecision
 
+# Patch to fix task sub-agent event isolation issue in ADK 2.2.0
+from google.adk.agents.invocation_context import InvocationContext
+
+_orig_get_events = InvocationContext._get_events
+
+def _patched_get_events(self, *, current_invocation: bool = False, current_branch: bool = False):
+    events = _orig_get_events(self, current_invocation=current_invocation, current_branch=current_branch)
+    return [e for e in events if getattr(e, "isolation_scope", None) == self.isolation_scope]
+
+InvocationContext._get_events = _patched_get_events
+
 try:
     _, project_id = google.auth.default()
     os.environ.setdefault("GOOGLE_CLOUD_PROJECT", project_id or "")
@@ -58,7 +69,7 @@ root_agent = LlmAgent(
     name="cto_orchestrator",
     model=Gemini(
         model=os.environ.get("GEMINI_MODEL", "gemini-3.5-flash"),
-        retry_options=types.HttpRetryOptions(attempts=3),
+        retry_options=types.HttpRetryOptions(attempts=6),
     ),
     description=(
         "CTO Orchestrator Agent for Engineering Governance. Accepts engineering change "
@@ -79,7 +90,9 @@ Accept any of:
 
 ## Orchestration process
 
-Delegate to ALL FIVE sub-agents by calling their respective tools. Provide each agent with the full context from the user's input:
+Delegate to ALL FIVE sub-agents by calling their respective tools.
+IMPORTANT: Call these tools SEQUENTIALLY, one by one. Do NOT call multiple sub-agent tools in parallel.
+Provide each agent with the full context from the user's input:
 - `security_agent`: Pass the full change description. Ask for a complete SecurityAssessment.
 - `architecture_agent`: Pass the full change description. Ask for a complete ArchitectureReview.
 - `delivery_agent`: Pass the full change description. Ask for a complete DeliveryPlan.

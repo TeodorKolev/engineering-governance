@@ -22,13 +22,17 @@ import os
 from google.adk.agents import LlmAgent
 from google.adk.models import Gemini
 
+from google.genai import types
 from app.schemas.evaluation import EvaluationReport
 from app.tools.github_tools import get_github_toolset
 from app.tools.jira_tools import get_jira_toolset
 
 evaluation_agent = LlmAgent(
     name="evaluation_agent",
-    model=Gemini(model=os.environ.get("GEMINI_MODEL", "gemini-3.5-flash")),
+    model=Gemini(
+        model=os.environ.get("GEMINI_MODEL", "gemini-3.5-flash"),
+        retry_options=types.HttpRetryOptions(attempts=6),
+    ),
     mode="task",
     output_schema=EvaluationReport,
     output_key="evaluation_report",

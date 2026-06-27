@@ -22,13 +22,17 @@ import os
 from google.adk.agents import LlmAgent
 from google.adk.models import Gemini
 
+from google.genai import types
 from app.schemas.delivery import DeliveryPlan
 from app.tools.github_tools import get_github_toolset
 from app.tools.jira_tools import get_jira_toolset
 
 delivery_agent = LlmAgent(
     name="delivery_agent",
-    model=Gemini(model=os.environ.get("GEMINI_MODEL", "gemini-3.5-flash")),
+    model=Gemini(
+        model=os.environ.get("GEMINI_MODEL", "gemini-3.5-flash"),
+        retry_options=types.HttpRetryOptions(attempts=6),
+    ),
     mode="task",
     output_schema=DeliveryPlan,
     output_key="delivery_plan",
