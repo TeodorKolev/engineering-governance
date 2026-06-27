@@ -103,23 +103,86 @@ If NO → proceed directly to Step 3.
 
 ### Step 3 — Synthesise and output GovernanceDecision
 
-Produce a GovernanceDecision with:
-- decision_id: format 'GOV-YYYYMMDD-<slug>' where slug is a 2-4 word kebab-case summary
-- timestamp: current UTC time in ISO-8601
-- overall_recommendation: synthesise from all five reports using this logic:
-  - REJECT if: any CRITICAL security finding, overall_risk=CRITICAL, or quality_gate=FAIL with no path to fix
-  - APPROVE_WITH_CONDITIONS if: HIGH risks exist but are manageable with stated conditions
-  - DEFER if: delivery_feasibility=BLOCKED, or missing critical information
-  - APPROVE if: all reports are LOW/MEDIUM risk and quality gate PASS
-- risk_level: take the maximum risk level across all five reports
-- conditions: list all required conditions from APPROVE_WITH_CONDITIONS verdicts
-- sub_agent_reports: include the raw structured output from each specialist
-- All summary fields: one sentence per specialist
+#### 3a. Risk-level normalisation (cross-agent)
+
+Normalise every agent's severity field to the shared 4-level scale before comparing:
+
+| Agent field | Raw value | Normalised risk_level |
+|---|---|---|
+| SecurityAssessment.overall_risk | CRITICAL | CRITICAL |
+| SecurityAssessment.overall_risk | HIGH | HIGH |
+| SecurityAssessment.overall_risk | MEDIUM | MEDIUM |
+| SecurityAssessment.overall_risk | LOW | LOW |
+| ArchitectureReview.overall_assessment | NEEDS_REWORK | HIGH |
+| ArchitectureReview.overall_assessment | APPROVED_WITH_CONCERNS | MEDIUM |
+| ArchitectureReview.overall_assessment | APPROVED | LOW |
+| DeliveryPlan.delivery_feasibility | BLOCKED | HIGH |
+| DeliveryPlan.delivery_feasibility | AT_RISK | MEDIUM |
+| DeliveryPlan.delivery_feasibility | ON_TRACK | LOW |
+| CostAnalysis.cost_impact_level | CRITICAL | CRITICAL |
+| CostAnalysis.cost_impact_level | HIGH | HIGH |
+| CostAnalysis.cost_impact_level | MEDIUM | MEDIUM |
+| CostAnalysis.cost_impact_level | LOW | LOW |
+| CostAnalysis.cost_impact_level | NEGLIGIBLE | LOW |
+| EvaluationReport.quality_gate | FAIL | HIGH |
+| EvaluationReport.quality_gate | CONDITIONAL_PASS | MEDIUM |
+| EvaluationReport.quality_gate | PASS | LOW |
+
+Set `risk_level` = maximum of all six normalised values above (CRITICAL > HIGH > MEDIUM > LOW).
+
+#### 3b. Recommendation selection rules (strict priority order — stop at first match)
+
+Apply these rules in order. The first rule that matches sets `overall_recommendation`:
+
+1. **REJECT** if ANY of:
+   - SecurityAssessment has any SecurityFinding with severity=CRITICAL
+   - SecurityAssessment.overall_risk = CRITICAL
+   - EvaluationReport.quality_gate = FAIL AND EvaluationReport.code_review_status = NOT_REVIEWED (no path to fix without human)
+
+2. **DEFER** if ANY of:
+   - DeliveryPlan.delivery_feasibility = BLOCKED
+   - CostAnalysis.budget_available = False or None AND CostAnalysis.cost_impact_level ∈ {HIGH, CRITICAL}
+   - Any agent could not access its required tools and the missing data is critical
+
+3. **APPROVE_WITH_CONDITIONS** if ANY of:
+   - SecurityAssessment.overall_risk = HIGH (with conditions = remediation steps)
+   - ArchitectureReview.overall_assessment = NEEDS_REWORK (with conditions = must-fix concerns)
+   - EvaluationReport.quality_gate = FAIL with code_review_status = CHANGES_REQUESTED (fixable path exists)
+   - CostAnalysis.cost_impact_level = HIGH and budget_available = True
+
+4. **APPROVE** if:
+   - None of the above rules matched
+   - All normalised risk levels are LOW or MEDIUM
+
+#### 3c. Conflict resolution between agents
+
+When two agents produce contradictory signals, apply these tie-breaker rules:
+
+| Conflict scenario | Resolution |
+|---|---|
+| Security=APPROVE but Evaluation=FAIL | FAIL takes precedence → REJECT or APPROVE_WITH_CONDITIONS |
+| Architecture=NEEDS_REWORK but Delivery=ON_TRACK | NEEDS_REWORK takes precedence → APPROVE_WITH_CONDITIONS |
+| Cost=CRITICAL but all others=LOW | Cost CRITICAL triggers REJECT (budget uncontrolled) |
+| Delivery=BLOCKED but Security+Arch both APPROVE | BLOCKED triggers DEFER (can't ship safely anyway) |
+| Human says APPROVE but Security=CRITICAL | Security CRITICAL is non-overridable → REJECT (note override attempt in human_approval_notes) |
+
+#### 3d. GovernanceDecision output
+
+Produce the final GovernanceDecision:
+- `decision_id`: format `GOV-YYYYMMDD-<slug>` (slug = 2-4 word kebab-case of the change)
+- `timestamp`: current UTC time in ISO-8601
+- `overall_recommendation`: result of Step 3b
+- `risk_level`: result of Step 3a
+- `conditions`: concrete, verifiable conditions (only for APPROVE_WITH_CONDITIONS)
+- `sub_agent_reports`: raw structured output from each specialist, keyed by agent name
+- `security_summary` / `architecture_summary` / `delivery_summary` / `cost_summary` / `evaluation_summary`: one sentence each, citing specific findings
+- `human_approval_required`: True if any agent's requires_human_approval was True
+- `human_approved_by` / `human_approval_notes`: populated from Step 2 response if HITL fired
 
 ## Tone and style
 - Be decisive. Governance exists to make decisions, not to defer everything.
-- Be specific. Reference actual findings from sub-agent reports.
-- Be actionable. Every condition must be concrete and verifiable.""",
+- Be specific. Reference actual agent findings by name and severity.
+- Be actionable. Every condition must be concrete and verifiable (not "fix security issues").""",
     sub_agents=[
         security_agent,
         architecture_agent,
