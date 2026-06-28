@@ -5,7 +5,7 @@ An AI-powered CTO governance system built with [Google ADK](https://adk.dev/). I
 ## Architecture
 
 ```
-User request (PR URL or Jira ticket)
+User request (GitHub PR URL or change description)
         │
         ▼
 ┌─────────────────────────────────────────────────┐
