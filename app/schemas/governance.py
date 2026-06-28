@@ -34,6 +34,7 @@ class GovernanceDecision(BaseModel):
         )
     )
     request_summary: str = Field(
+        default="",
         description="One-paragraph summary of what was reviewed and why."
     )
     overall_recommendation: Literal[
@@ -60,18 +61,23 @@ class GovernanceDecision(BaseModel):
         description="Aggregate risk level synthesized from all specialist reports."
     )
     security_summary: str = Field(
+        default="",
         description="One-sentence summary of the security assessment."
     )
     architecture_summary: str = Field(
+        default="",
         description="One-sentence summary of the architecture review."
     )
     delivery_summary: str = Field(
+        default="",
         description="One-sentence summary of the delivery plan assessment."
     )
     cost_summary: str = Field(
+        default="",
         description="One-sentence summary of the cost analysis."
     )
     evaluation_summary: str = Field(
+        default="",
         description="One-sentence summary of the evaluation report."
     )
     sub_agent_reports: dict[str, Any] = Field(
