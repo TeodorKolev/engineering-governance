@@ -22,7 +22,7 @@ from pydantic import BaseModel, Field
 class ResourceCostImpact(BaseModel):
     """Cost impact of a specific AWS resource or service change."""
 
-    resource_type: str = Field(description="AWS resource type (e.g. EC2, RDS, S3, Lambda).")
+    resource_type: str = Field(description="Cloud resource type (e.g. EC2/Compute Engine, RDS/Cloud SQL, S3/GCS, Lambda/Cloud Functions).")
     resource_id: str | None = Field(
         default=None,
         description="Resource identifier if known.",
