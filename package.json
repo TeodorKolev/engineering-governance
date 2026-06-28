@@ -4,8 +4,6 @@
   "description": "Local installation of MCP servers for the Engineering Governance Agent",
   "private": true,
   "dependencies": {
-    "@mcp-devtools/jira": "^0.2.6",
-    "@modelcontextprotocol/server-github": "^0.6.2",
-    "@yawlabs/aws-mcp": "^1.5.3"
+    "@modelcontextprotocol/server-github": "^0.6.2"
   }
 }
