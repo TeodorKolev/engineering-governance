@@ -174,23 +174,24 @@ Opens the ADK dev UI at `http://localhost:8080`.
 
 ## ADK Dev UI Guide
 
-The playground UI (`agents-cli playground`) has four main sections:
+Run `agents-cli playground` and open `http://localhost:8080`. The **"Select an App"** dropdown at the top lists four modules:
 
-### Chat panel (left)
-Send your change request here. The agent responds with the final `GovernanceDecision` JSON once all six agents have completed. Because agents run sequentially with a 12-second inter-agent delay, a full review takes approximately 90 seconds on the free tier.
+### 1. `app` — the governance agent
+This is the main module. Select it to interact with the `cto_orchestrator` pipeline.
 
-### Events / Trace panel (right)
-Shows every ADK event in real time:
-- **Model calls** — each `Sending out request` line is one LLM call. You will see 6 per review (one per agent).
-- **Tool calls** — expand any event to see which GitHub tools were called and what they returned (PR details, file list, review status).
-- **State mutations** — events where an agent writes its output to session state (e.g. `security_assessment`, `architecture_assessment`).
-- **Session trace** — click the trace link at the bottom to see the full structured trace for the session, including all tool inputs/outputs and intermediate model responses.
+- **Chat panel (left):** Send your change request here. The agent responds with the final `GovernanceDecision` JSON once all six agents complete. Expect ~90 seconds on the free tier due to the inter-agent throttle.
+- **Events panel (right):** Streams every ADK event in real time. You will see 6 model calls per review (one per agent), tool calls showing which GitHub endpoints were hit and what they returned, and state mutations where each agent writes its structured output.
+- **Sessions tab:** Lists all previous sessions. Click any session to replay its full trace — useful for debugging a failed run without re-running the pipeline.
+- **Trace view:** Click the trace link at the bottom of any session to see the complete structured trace: all LLM inputs/outputs, tool call arguments and responses, and session state at each step.
 
-### App tab
-Displays the registered ADK app (`cto_orchestrator`) and its agent hierarchy. Use this to confirm the pipeline loaded correctly on startup.
+### 2. `deployment` — deployment configuration
+Shows the deployment metadata for this project: the Cloud Run service name, region, container image tag, and environment variable configuration. Use this module to verify what will be deployed before running `agents-cli deploy`. It reflects the values in `agents-cli-manifest.yaml` and the Terraform variables in `deployment/terraform/single-project/vars/env.tfvars`.
 
-### Sessions tab
-Lists all previous sessions. Click any session to replay its trace — useful for debugging a failed governance run without re-running the full pipeline.
+### 3. `node_modules` — MCP server packages
+Shows the npm packages installed in `node_modules/` that serve as MCP (Model Context Protocol) servers. Currently this contains `@modelcontextprotocol/server-github`, the GitHub MCP server that provides the `get_pull_request`, `get_pull_request_files`, `get_pull_request_reviews`, and `get_pull_request_status` tools. Use this module to verify the MCP server binary is present and to inspect which version is installed. If the GitHub MCP server is missing, run `npm install` to restore it.
+
+### 4. `tests` — eval and test suite
+Provides an interface to run and inspect the agent's evaluation suite without leaving the browser. Shows the 5 labelled test cases from `tests/eval/datasets/governance_eval.json`, lets you run individual cases against the live agent, and displays the graded results against the criteria defined in `tests/eval/eval_config.yaml`. The same suite can be run from the terminal with `agents-cli eval run`.
 
 ---
 
