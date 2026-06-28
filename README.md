@@ -48,7 +48,7 @@ KAN-1: Add Redis caching to the user-service
 Run governance for PR #42 in owner/repo
 ```
 
-The system detects change requests by keyword (`pr`, `pull`, `github`, `review`, `deploy`, …) and by Jira-style ticket IDs (`[A-Z]+-\d+`). Anything else is treated as a general chat query and skips the specialist pipeline.
+The system detects change requests by keyword (`pr`, `pull`, `github`, `review`, `deploy`, …) and by ticket IDs matching `[A-Z]+-\d+` (e.g. `KAN-1`). Anything else is treated as a general chat query and skips the specialist pipeline.
 
 ## Setup
 
