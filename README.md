@@ -1,88 +1,141 @@
-# eng-governance
+# Engineering Governance Agent
 
-Simple ReAct agent
-Agent generated with `agents-cli` version `0.5.0`
+An AI-powered CTO governance system built with [Google ADK](https://adk.dev/). It runs a sequential pipeline of five specialist AI agents that review engineering changes, then synthesises their findings into a binding `GovernanceDecision`.
 
-## Project Structure
+## Architecture
 
 ```
-eng-governance/
-├── app/         # Core agent code
-│   ├── agent.py               # Main agent logic
-│   ├── fast_api_app.py        # FastAPI Backend server
-│   └── app_utils/             # App utilities and helpers
-├── tests/                     # Unit, integration, and load tests
-├── GEMINI.md                  # AI-assisted development guide
-└── pyproject.toml             # Project dependencies
+User request (PR URL or Jira ticket)
+        │
+        ▼
+┌─────────────────────────────────────────────────┐
+│              cto_orchestrator                   │
+│           (SequentialAgent)                     │
+│                                                 │
+│  1. security_agent   → SecurityAssessment       │
+│  2. architecture_agent → ArchitectureReview     │
+│  3. delivery_agent   → DeliveryPlan             │
+│  4. cost_agent       → CostAnalysis             │
+│  5. evaluation_agent → EvaluationReport         │
+│  6. cto_synthesizer  → GovernanceDecision       │
+└─────────────────────────────────────────────────┘
 ```
 
-> 💡 **Tip:** Use [Gemini CLI](https://github.com/google-gemini/gemini-cli) for AI-assisted development - project context is pre-configured in `GEMINI.md`.
+Each specialist writes its structured output to session state. The `cto_synthesizer` reads all five and produces a final `GovernanceDecision` with an `overall_recommendation` of `APPROVE`, `APPROVE_WITH_CONDITIONS`, `DEFER`, or `REJECT`.
 
-## Requirements
+## Agents
 
-Before you begin, ensure you have:
-- **uv**: Python package manager (used for all dependency management in this project) - [Install](https://docs.astral.sh/uv/getting-started/installation/) ([add packages](https://docs.astral.sh/uv/concepts/dependencies/) with `uv add <package>`)
-- **agents-cli**: Agents CLI - Install with `uv tool install google-agents-cli`
-- **Google Cloud SDK**: For GCP services - [Install](https://cloud.google.com/sdk/docs/install)
+| Agent | Tools | Output |
+|---|---|---|
+| `security_agent` | GitHub (PR + files) | `SecurityAssessment` |
+| `architecture_agent` | GitHub (PR + files) | `ArchitectureReview` |
+| `delivery_agent` | GitHub (PR + reviews + status) | `DeliveryPlan` |
+| `cost_agent` | None (uses built-in AWS pricing knowledge) | `CostAnalysis` |
+| `evaluation_agent` | GitHub (PR + reviews + status + files) | `EvaluationReport` |
+| `cto_synthesizer` | `request_input` (human-in-the-loop) | `GovernanceDecision` |
 
+## Usage
 
-## Quick Start
+Send any of the following to the agent in the playground UI:
 
-Install `agents-cli` and its skills if not already installed:
-
-```bash
-uvx google-agents-cli setup
+```
+Review https://github.com/owner/repo/pull/42
+```
+```
+KAN-1: Add Redis caching to the user-service
+```
+```
+Run governance for PR #42 in owner/repo
 ```
 
-Install required packages:
+The system detects change requests by keyword (`pr`, `pull`, `github`, `review`, `deploy`, …) and by Jira-style ticket IDs (`[A-Z]+-\d+`). Anything else is treated as a general chat query and skips the specialist pipeline.
+
+## Setup
+
+### Requirements
+
+- Python 3.11+
+- Node.js (for GitHub MCP server via `npx`)
+- `uv` package manager
+- A [Google AI Studio API key](https://aistudio.google.com/apikey) (starts with `AIza`)
+
+### Install
 
 ```bash
 agents-cli install
 ```
 
-Test the agent with a local web server:
+### Configure
+
+Copy `app/.env.example` to `app/.env` and fill in:
+
+```env
+# Required
+GEMINI_API_KEY=AIza...          # Google AI Studio key (NOT a Vertex AI key)
+GOOGLE_GENAI_USE_VERTEXAI=false
+GEMINI_MODEL=gemini-2.0-flash
+
+# GitHub (for PR reviews)
+GITHUB_PERSONAL_ACCESS_TOKEN=ghp_...
+
+# Optional — Jira (removed from agents, kept for future use)
+JIRA_URL=https://yourorg.atlassian.net
+JIRA_API_MAIL=you@example.com
+JIRA_API_KEY=ATATT...
+
+# Free-tier throttle (seconds between agents). Set to 0 on paid tiers.
+INTER_AGENT_DELAY_SECONDS=12
+```
+
+### Run
 
 ```bash
 agents-cli playground
 ```
 
-You can also use features from the [ADK](https://adk.dev/) CLI with `uv run adk`.
+Opens the ADK dev UI at `http://localhost:8080`.
+
+## Rate Limit Notes
+
+This project runs 6 sequential LLM calls per governance review. On the Gemini API free tier:
+
+| Key type | RPM | TPM | RPD |
+|---|---|---|---|
+| AI Studio (`AIza...`) | 15 | 1M | 1,500 |
+| Vertex AI (`AQ...`) | 5 | 250k | 20 |
+
+Always use an AI Studio key. The `INTER_AGENT_DELAY_SECONDS` env var (default `12`) spreads calls across the 1-minute TPM window to avoid 429 errors on the free tier.
+
+## Project Structure
+
+```
+eng-governance/
+├── app/
+│   ├── agent.py                  # Root orchestrator + patches + callbacks
+│   ├── agents/
+│   │   ├── security_agent.py
+│   │   ├── architecture_agent.py
+│   │   ├── delivery_agent.py
+│   │   ├── cost_agent.py
+│   │   ├── evaluation_agent.py
+│   │   └── _throttle.py          # Inter-agent rate-limit callback
+│   ├── schemas/                  # Pydantic output schemas
+│   ├── tools/
+│   │   ├── github_tools.py       # GitHub MCP toolset factory
+│   │   ├── aws_tools.py          # AWS MCP toolset factory (available, not wired)
+│   │   └── jira_tools.py         # Jira MCP toolset factory (available, not wired)
+│   └── .env                      # Local config (not committed)
+├── tests/
+├── GEMINI.md
+└── README.md
+```
 
 ## Commands
 
-| Command              | Description                                                                                 |
-| -------------------- | ------------------------------------------------------------------------------------------- |
-| `agents-cli install` | Install dependencies using uv                                                         |
-| `agents-cli playground` | Launch local development environment                                                  |
-| `agents-cli lint`    | Run code quality checks                                                               |
-| `agents-cli eval`    | Evaluate agent behavior (generate, grade, analyze, and more — see `agents-cli eval --help`) |
-| `uv run pytest tests/unit tests/integration` | Run unit and integration tests                                                        |
-| `agents-cli deploy`  | Deploy agent to Cloud Run                                                                   |
-
-## 🛠️ Project Management
-
-| Command | What It Does |
-|---------|--------------|
-| `agents-cli scaffold enhance` | Add CI/CD pipelines and Terraform infrastructure |
-| `agents-cli infra cicd` | One-command setup of entire CI/CD pipeline + infrastructure |
-| `agents-cli scaffold upgrade` | Auto-upgrade to latest version while preserving customizations |
-
----
-
-## Development
-
-Edit your agent logic in `app/agent.py` and test with `agents-cli playground` - it auto-reloads on save.
-
-## Deployment
-
-```bash
-gcloud config set project <your-project-id>
-agents-cli deploy
-```
-
-To add CI/CD and Terraform, run `agents-cli scaffold enhance`.
-To set up your production infrastructure, run `agents-cli infra cicd`.
-
-## Observability
-
-Built-in telemetry exports to Cloud Trace, BigQuery, and Cloud Logging.
+| Command | Description |
+|---|---|
+| `agents-cli playground` | Launch local dev UI |
+| `agents-cli lint` | Run code quality checks |
+| `agents-cli eval` | Evaluate agent behaviour |
+| `uv run pytest tests/unit tests/integration` | Run tests |
+| `agents-cli deploy` | Deploy to Cloud Run |
