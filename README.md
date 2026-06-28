@@ -78,11 +78,6 @@ GEMINI_MODEL=gemini-2.0-flash
 # GitHub (for PR reviews)
 GITHUB_PERSONAL_ACCESS_TOKEN=ghp_...
 
-# Optional — Jira (removed from agents, kept for future use)
-JIRA_URL=https://yourorg.atlassian.net
-JIRA_API_MAIL=you@example.com
-JIRA_API_KEY=ATATT...
-
 # Free-tier throttle (seconds between agents). Set to 0 on paid tiers.
 INTER_AGENT_DELAY_SECONDS=12
 ```
@@ -121,9 +116,7 @@ eng-governance/
 │   │   └── _throttle.py          # Inter-agent rate-limit callback
 │   ├── schemas/                  # Pydantic output schemas
 │   ├── tools/
-│   │   ├── github_tools.py       # GitHub MCP toolset factory
-│   │   ├── aws_tools.py          # AWS MCP toolset factory (available, not wired)
-│   │   └── jira_tools.py         # Jira MCP toolset factory (available, not wired)
+│   │   └── github_tools.py       # GitHub MCP toolset factory
 │   └── .env                      # Local config (not committed)
 ├── tests/
 ├── GEMINI.md
