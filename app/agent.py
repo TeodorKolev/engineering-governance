@@ -32,7 +32,7 @@ load_dotenv()
 load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
 
 import google.auth
-from google.adk.agents import LlmAgent, ParallelAgent, SequentialAgent
+from google.adk.agents import LlmAgent, SequentialAgent
 from google.adk.apps import App, ResumabilityConfig
 from google.adk.models import Gemini
 from google.adk.tools import request_input
@@ -159,6 +159,14 @@ except google.auth.exceptions.DefaultCredentialsError:
 os.environ.setdefault("GOOGLE_CLOUD_LOCATION", "global")
 os.environ.setdefault("GOOGLE_GENAI_USE_VERTEXAI", "True")
 
+_INTER_AGENT_DELAY = float(os.environ.get("INTER_AGENT_DELAY_SECONDS", "12"))
+
+async def throttle_between_agents(callback_context) -> None:
+    """Pause between sequential specialist agents to avoid TPM bursts on the free tier."""
+    import asyncio
+    if _INTER_AGENT_DELAY > 0:
+        await asyncio.sleep(_INTER_AGENT_DELAY)
+
 async def save_original_input(callback_context) -> Optional[types.Content]:
     """Save the initial user request text to the state.
 
@@ -226,9 +234,13 @@ async def save_original_input(callback_context) -> Optional[types.Content]:
         text = "\n".join(part.text for part in callback_context.user_content.parts if part.text)
         callback_context.state["temp:original_input"] = text
 
-        is_change_request = any(
-            keyword in text.lower()
-            for keyword in ["pr", "pull", "github", "jira", "eng-", "aws", "commit", "review", "change", "architecture", "deploy"]
+        import re as _re
+        is_change_request = bool(
+            any(
+                keyword in text.lower()
+                for keyword in ["pr", "pull", "github", "jira", "aws", "commit", "review", "change", "architecture", "deploy"]
+            )
+            or _re.search(r'\b[A-Z][A-Z0-9]+-\d+\b', text)  # Jira ticket IDs: KAN-1, ENG-42, SCRUM-100
         )
         if not is_change_request:
             # Overwrite defaults with skip-labelled values, then skip execution.
@@ -423,24 +435,17 @@ Produce the final GovernanceDecision:
     after_agent_callback=post_process_decision,
 )
 
-specialist_reviewers = ParallelAgent(
-    name="specialist_reviewers",
+root_agent = SequentialAgent(
+    name="cto_orchestrator",
     sub_agents=[
         security_agent,
         architecture_agent,
         delivery_agent,
         cost_agent,
         evaluation_agent,
-    ],
-    before_agent_callback=save_original_input,
-)
-
-root_agent = SequentialAgent(
-    name="cto_orchestrator",
-    sub_agents=[
-        specialist_reviewers,
         cto_synthesizer,
     ],
+    before_agent_callback=save_original_input,
 )
 
 app = App(

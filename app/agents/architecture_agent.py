@@ -14,8 +14,8 @@
 
 """Architecture Agent — reviews engineering designs and system changes.
 
-Uses GitHub MCP to inspect code structure and AWS MCP to understand
-infrastructure topology. Produces a structured ArchitectureReview.
+Uses GitHub MCP to inspect code structure and module design.
+Produces a structured ArchitectureReview.
 """
 
 import os
@@ -24,8 +24,8 @@ from google.adk.models import Gemini
 
 from google.genai import types
 from app.schemas.architecture import ArchitectureReview
-from app.tools.aws_tools import get_aws_toolset
 from app.tools.github_tools import get_github_toolset
+from app.agents._throttle import throttle_after_agent
 
 architecture_agent = LlmAgent(
     name="architecture_agent",
@@ -51,28 +51,26 @@ Your mission: review the proposed engineering change from an architectural persp
 
 1. **Understand the change**: Identify what system components are being added, modified, or removed.
 2. **Code structure review** (using GitHub tools):
-   - Fetch PR files and inspect the design: class/module structure, API contracts, data models
-   - Identify: tight coupling, missing abstractions, violations of separation of concerns
+   - Fetch the PR (`get_pull_request`) for title/description, then list changed files (`get_pull_request_files`) to understand the scope and design
+   - Identify from file names, paths, and PR description: tight coupling, missing abstractions, violations of separation of concerns
    - Check for synchronous patterns where async would be needed at scale
-3. **Infrastructure topology** (using AWS tools):
-   - If infrastructure is changing, assess the AWS resource topology: VPC layout, load balancer placement, database tier
-   - Check for single points of failure, missing redundancy, or cross-AZ gaps
-4. **Dependency analysis**:
+3. **Dependency analysis**:
    - Identify new external dependencies introduced and their maturity/license/maintenance status
    - Flag circular dependencies or version conflicts
-5. **Scalability assessment**:
+4. **Scalability assessment**:
    - Estimate how the change performs under 10x load
    - Identify bottlenecks: N+1 queries, missing caching, synchronous fan-out
 
 ## Concern severity rules
-- HIGH: Fundamental design flaw that will cause failures at scale, or violates core architectural principles (e.g. direct DB access from frontend, missing idempotency on payment flows)
-- MEDIUM: Suboptimal pattern that should be fixed before production (e.g. missing pagination, synchronous call in hot path)
+- HIGH: Fundamental design flaw that will cause failures at scale, or violates core architectural principles
+- MEDIUM: Suboptimal pattern that should be fixed before production
 - LOW: Improvement suggestion, minor anti-pattern
 
 ## Output rules
 - Set `requires_human_approval = True` if overall_assessment is NEEDS_REWORK or any concern is HIGH severity
 - `design_pattern_alignment` should reference the actual patterns in the codebase (from GitHub inspection)
-- If you cannot access GitHub or AWS, base assessment on description and note the limitation
+- **If no GitHub PR URL is provided or tools return no results**: set overall_assessment = APPROVED, concerns = [], requires_human_approval = False, and explain in recommendation that a PR link is needed for a full architecture review. Do NOT flag concerns just because context is missing.
 - Call `finish_task` when your ArchitectureReview is complete""",
-    tools=[get_github_toolset(), get_aws_toolset()],
+    tools=[get_github_toolset(tool_names=["get_pull_request", "get_pull_request_files"], include_file_contents=False)],
+    after_agent_callback=throttle_after_agent,
 )

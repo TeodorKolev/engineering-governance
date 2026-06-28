@@ -87,23 +87,35 @@ class CachedGetFileContents(BaseTool):
                 )
             )
 
+    # Cap file content returned to the model to keep token usage bounded.
+    _MAX_CHARS = 6_000
+
     async def run_async(self, *, args: dict, tool_context: ToolContext) -> Any:
         owner = args.get("owner")
         repo = args.get("repo")
         path = args.get("path")
         branch = args.get("branch")
-        
+
         cache_key = (owner, repo, path, branch)
         if cache_key in _file_contents_cache:
             return _file_contents_cache[cache_key]
-            
-        # Get the underlying raw tool
+
         tools = await self.raw_mcp_toolset.get_tools(tool_context._invocation_context)
         raw_tool = next((t for t in tools if t.name == "get_file_contents"), None)
         if not raw_tool:
             raise ValueError("Underlying get_file_contents tool not found in MCP toolset.")
-            
+
         result = await raw_tool.run_async(args=args, tool_context=tool_context)
+
+        # Truncate large files to avoid flooding the context window.
+        if isinstance(result, str) and len(result) > self._MAX_CHARS:
+            result = result[: self._MAX_CHARS] + f"\n... [truncated — {len(result)} chars total]"
+        elif isinstance(result, list):
+            for item in result:
+                if isinstance(item, dict) and isinstance(item.get("text"), str):
+                    if len(item["text"]) > self._MAX_CHARS:
+                        item["text"] = item["text"][: self._MAX_CHARS] + f"\n... [truncated — {len(item['text'])} chars total]"
+
         _file_contents_cache[cache_key] = result
         return result
 
@@ -124,14 +136,20 @@ class CachedGithubToolset(McpToolset):
         await self.raw_github_toolset.close()
 
 
-def get_github_toolset(use_sse: bool = False, include_raw_get_file_contents: bool = False) -> McpToolset:
+def get_github_toolset(
+    use_sse: bool = False,
+    include_raw_get_file_contents: bool = False,
+    tool_names: Optional[List[str]] = None,
+    include_file_contents: bool = False,
+) -> McpToolset:
     """Return a GitHub MCP toolset.
 
     Args:
-        use_sse: If True, connect to a remote GitHub MCP server via SSE
-                 (set GITHUB_MCP_SSE_URL). If False (default), launch a local
-                 stdio-based server via npx — suitable for dev and Cloud Run.
+        use_sse: If True, connect to a remote GitHub MCP server via SSE.
         include_raw_get_file_contents: If True, include raw get_file_contents in the filter.
+        tool_names: If provided, overrides the default tool_filter list.
+        include_file_contents: If False (default), strips get_file_contents even from
+            CachedGithubToolset. Set True only for agents that explicitly need file reading.
 
     Returns:
         McpToolset configured for GitHub operations.
@@ -166,25 +184,23 @@ def get_github_toolset(use_sse: bool = False, include_raw_get_file_contents: boo
             )
         )
 
-    # Expose only the tools relevant to governance workflows.
-    tool_filter = [
+    default_tools = [
         "get_pull_request",
-        "list_pull_requests",
         "get_pull_request_files",
         "get_pull_request_reviews",
         "get_pull_request_status",
-        "create_issue",
-        "get_issue",
-        "list_issues",
-        "add_issue_comment",
-        "list_commits",
-        "get_commit",
-        "search_repositories",
-        "search_code",
     ]
-    
+    tool_filter = tool_names if tool_names is not None else default_tools
+
     if include_raw_get_file_contents:
-        tool_filter.append("get_file_contents")
+        tool_filter = list(tool_filter) + ["get_file_contents"]
+        return McpToolset(
+            connection_params=connection_params,
+            tool_filter=tool_filter,
+        )
+
+    if not include_file_contents:
+        # Skip the cached wrapper entirely — return a plain McpToolset with no get_file_contents.
         return McpToolset(
             connection_params=connection_params,
             tool_filter=tool_filter,
@@ -192,7 +208,9 @@ def get_github_toolset(use_sse: bool = False, include_raw_get_file_contents: boo
 
     raw_github_toolset = get_github_toolset(
         use_sse=use_sse,
-        include_raw_get_file_contents=True
+        include_raw_get_file_contents=True,
+        tool_names=tool_names,
+        include_file_contents=True,
     )
 
     return CachedGithubToolset(
