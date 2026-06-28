@@ -1,5 +1,25 @@
 # Engineering Governance Agent
 
+## Why This Project Matters
+
+Engineering teams ship dozens of PRs per week, but CTOs and senior engineers can't manually review every change for security, architecture, cost, and delivery risk. Things fall through. Incidents happen. Cloud bills spike. Security audits fail.
+
+This system acts as an always-on AI CTO that automatically reviews every code change across five critical dimensions before it merges:
+
+| Dimension | Business Risk Avoided |
+|---|---|
+| **Security** | Prevents breaches, SOC2/GDPR/PCI-DSS violations, and credential leaks |
+| **Architecture** | Catches scalability bottlenecks and design debt before they become production incidents |
+| **Delivery** | Flags blocked PRs, failing CI, and deadline conflicts before they slip |
+| **Cost** | Stops surprise cloud bill spikes — a single unreviewed DB upgrade can add $50k+/month |
+| **Quality** | Enforces test coverage and blocks untested risky changes |
+
+A single undetected security incident can cost millions in fines, remediation, and reputation damage. Cloud cost overruns from unreviewed infra changes are a top cause of engineering budget blowouts. The human-in-the-loop gate ensures high-stakes decisions (CRITICAL risk, budget impact) still get a named human sign-off — preserving accountability without creating a bottleneck on every PR.
+
+This is a force multiplier for a small engineering team: CTO-level oversight on every merge without hiring a principal reviewer for every team. It scales governance linearly with PR volume at near-zero marginal cost.
+
+---
+
 An AI-powered CTO governance system built with [Google ADK](https://adk.dev/). It runs a sequential pipeline of seven agents: a GitHub data fetcher, five specialist reviewers, and a CTO synthesizer that produces a binding `GovernanceDecision`.
 
 ---
