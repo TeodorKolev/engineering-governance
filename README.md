@@ -1,6 +1,6 @@
 # Engineering Governance Agent
 
-An AI-powered CTO governance system built with [Google ADK](https://adk.dev/). It runs a sequential pipeline of five specialist AI agents that review engineering changes, then synthesises their findings into a binding `GovernanceDecision`.
+An AI-powered CTO governance system built with [Google ADK](https://adk.dev/). It runs a sequential pipeline of seven agents: a GitHub data fetcher, five specialist reviewers, and a CTO synthesizer that produces a binding `GovernanceDecision`.
 
 ---
 
@@ -10,87 +10,103 @@ An AI-powered CTO governance system built with [Google ADK](https://adk.dev/). I
 User request (GitHub PR URL or change description)
         │
         ▼
-┌─────────────────────────────────────────────────┐
-│              cto_orchestrator                   │
-│           (SequentialAgent)                     │
-│                                                 │
-│  1. security_agent   → SecurityAssessment       │
-│  2. architecture_agent → ArchitectureReview     │
-│  3. delivery_agent   → DeliveryPlan             │
-│  4. cost_agent       → CostAnalysis             │
-│  5. evaluation_agent → EvaluationReport         │
-│  6. cto_synthesizer  → GovernanceDecision       │
-└─────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────┐
+│                 cto_orchestrator                     │
+│              (SequentialAgent)                       │
+│                                                      │
+│  1. github_fetcher_agent → pr_context (session state)│
+│        ↓ fetches PR, reviews, CI, file contents      │
+│        ↓ all specialists read from {pr_context}      │
+│                                                      │
+│  2. security_agent     → SecurityAssessment          │
+│  3. architecture_agent → ArchitectureReview          │
+│  4. delivery_agent     → DeliveryPlan                │
+│  5. cost_agent         → CostAnalysis                │
+│  6. evaluation_agent   → EvaluationReport            │
+│  7. cto_synthesizer    → GovernanceDecision          │
+└──────────────────────────────────────────────────────┘
 ```
 
-Each specialist writes its structured JSON output to session state via `output_key`. The `cto_synthesizer` reads all five outputs and produces a final `GovernanceDecision` with an `overall_recommendation` of `APPROVE`, `APPROVE_WITH_CONDITIONS`, `DEFER`, or `REJECT`.
+The `github_fetcher_agent` runs first and is the **only agent that calls GitHub**. It fetches PR metadata, the changed file list, review status, CI status, and the contents of up to 15 source files, then writes a structured `pr_context` report to session state. All five specialists read from `{pr_context}` — they have no tools and complete in a single LLM call each. The `cto_synthesizer` reads all five structured outputs and produces a final `GovernanceDecision` with an `overall_recommendation` of `APPROVE`, `APPROVE_WITH_CONDITIONS`, `DEFER`, or `REJECT`.
 
 ---
 
 ## Agents
 
-### 1. `security_agent`
+### 1. `github_fetcher_agent`
+**Role:** GitHub Data Collector  
+**Tools:** `get_pull_request`, `get_pull_request_files`, `get_pull_request_reviews`, `get_pull_request_status`, `get_file_contents`  
+**Output:** `pr_context` (plain-text report written to session state)
+
+Runs first. Fetches all GitHub data needed for governance and writes a structured report to session state under the key `pr_context`. All downstream agents inject `{pr_context}` into their instructions and need no GitHub tools of their own.
+
+What it fetches:
+- PR title, description, author, state, labels, mergeable status
+- Full list of changed files with additions/deletions
+- Review decisions (approved / changes requested)
+- CI check status (passing / failing)
+- Contents of up to 15 source files (skips binaries and lock files)
+
+If no GitHub PR URL is present in the request, writes a note to `pr_context` and all specialists return safe default assessments.
+
+---
+
+### 2. `security_agent`
 **Role:** Senior Security Engineer  
-**Tools:** `get_pull_request`, `get_pull_request_files`  
+**Tools:** None — reads `{pr_context}`  
 **Output schema:** `SecurityAssessment`
 
-Fetches the PR title/description and the list of changed files, then identifies security risks. Checks for: hardcoded secrets, injection vulnerabilities (SQL/command/XSS), broken access control, insecure dependencies (CVEs), and compliance implications (SOC2, GDPR, PCI-DSS).
+Reviews the actual file contents from `pr_context` to identify security risks: hardcoded secrets, injection vulnerabilities (SQL/command/XSS), broken access control, insecure dependencies (CVEs), and compliance implications (SOC2, GDPR, PCI-DSS).
 
 Severity levels: `CRITICAL` → `HIGH` → `MEDIUM` → `LOW`. Sets `requires_human_approval = True` if `overall_risk` is `HIGH` or `CRITICAL`, or if any individual finding is `CRITICAL`.
 
-If no GitHub PR URL is provided, returns `overall_risk = LOW` with a note that a PR link is needed for a full review.
-
 ---
 
-### 2. `architecture_agent`
+### 3. `architecture_agent`
 **Role:** Principal Software Architect  
-**Tools:** `get_pull_request`, `get_pull_request_files`  
+**Tools:** None — reads `{pr_context}`  
 **Output schema:** `ArchitectureReview`
 
-Inspects the changed file list and PR description to assess design quality: coupling, separation of concerns, missing abstractions, scalability bottlenecks (N+1 queries, missing caching, synchronous fan-out), and new dependency risks.
+Reviews the actual file contents from `pr_context` to assess design quality: coupling, separation of concerns, missing abstractions, scalability bottlenecks (N+1 queries, missing caching, synchronous fan-out), and new dependency risks.
 
 Verdicts: `APPROVED` / `APPROVED_WITH_CONCERNS` / `NEEDS_REWORK`. Sets `requires_human_approval = True` if verdict is `NEEDS_REWORK` or any concern is `HIGH` severity.
 
-If no GitHub PR URL is provided, returns `APPROVED` with a note that a PR link is needed.
-
 ---
 
-### 3. `delivery_agent`
+### 4. `delivery_agent`
 **Role:** Engineering Delivery Manager  
-**Tools:** `get_pull_request`, `get_pull_request_reviews`, `get_pull_request_status`  
+**Tools:** None — reads `{pr_context}`  
 **Output schema:** `DeliveryPlan`
 
-Checks whether the PR is ready to ship: review approvals, CI check status, merge conflicts, and mergeable state. Identifies delivery risks such as deadline conflicts, resource contention, dependency blockers, and rollback complexity.
+Reads review decisions and CI status from `pr_context` to assess whether the PR is ready to ship. Identifies delivery risks: deadline conflicts, resource contention, dependency blockers, and rollback complexity.
 
 Feasibility: `ON_TRACK` / `AT_RISK` / `BLOCKED`. Sets `requires_human_approval = True` if `BLOCKED` or any risk has `HIGH` probability.
 
-If no GitHub PR URL is provided, returns `ON_TRACK` with a note that a PR link is needed.
-
 ---
 
-### 4. `cost_agent`
+### 5. `cost_agent`
 **Role:** Cloud FinOps Engineer  
-**Tools:** None  
+**Tools:** None — reads `{pr_context}`  
 **Output schema:** `CostAnalysis`
 
-Works entirely from the change description and built-in cloud pricing knowledge. Identifies AWS resources being added or scaled (EC2, RDS, S3, Lambda, EKS), estimates the monthly cost delta, and classifies impact: `NEGLIGIBLE` (<$50) / `LOW` ($50–$500) / `MEDIUM` ($500–$5k) / `HIGH` ($5k–$50k) / `CRITICAL` (>$50k).
+Works from the PR description and file list using built-in cloud pricing knowledge. Identifies infrastructure resources being added or scaled (EC2, RDS, S3, Lambda, EKS) and estimates the monthly cost delta.
 
-Sets `requires_human_approval = True` if impact is `HIGH` or `CRITICAL`. If the change has no infrastructure component, returns `NEGLIGIBLE` and explains why.
+Impact levels: `NEGLIGIBLE` (<$50) / `LOW` ($50–$500) / `MEDIUM` ($500–$5k) / `HIGH` ($5k–$50k) / `CRITICAL` (>$50k). Sets `requires_human_approval = True` if `HIGH` or `CRITICAL`.
 
 ---
 
-### 5. `evaluation_agent`
+### 6. `evaluation_agent`
 **Role:** Quality Engineering  
-**Tools:** `get_pull_request`, `get_pull_request_reviews`, `get_pull_request_status`, `get_pull_request_files`  
+**Tools:** None — reads `{pr_context}`  
 **Output schema:** `EvaluationReport`
 
-Assesses code quality and release readiness: PR review status (approved / changes requested / not reviewed), CI pipeline pass/fail, and test coverage gaps (missing unit/integration/e2e tests inferred from changed file paths).
+Reads CI status and review decisions from `pr_context`. Inspects changed file paths and file contents to identify missing test files (unit, integration, e2e). Assesses regression risk based on scope of change and test coverage.
 
 Quality gate: `PASS` / `CONDITIONAL_PASS` / `FAIL`. Sets `requires_human_approval = True` if gate is `FAIL` or review status is `NOT_REVIEWED` / `CHANGES_REQUESTED`.
 
 ---
 
-### 6. `cto_synthesizer`
+### 7. `cto_synthesizer`
 **Role:** Chief Technology Officer  
 **Tools:** `request_input` (human-in-the-loop gate)  
 **Output schema:** `GovernanceDecision`
@@ -124,7 +140,7 @@ We're migrating from db.t3.micro to db.r6g.4xlarge for the holiday season
 
 The system detects change requests by keyword (`pr`, `pull`, `github`, `review`, `deploy`, …) and by ticket IDs matching `[A-Z]+-\d+` (e.g. `KAN-1`). Anything else is treated as a general chat query and skips the specialist pipeline.
 
-**Tip:** For the richest output, always include a GitHub PR URL. Without it, agents can still assess cost and architecture from the description, but security and delivery checks will return minimal results.
+**Tip:** Always include a GitHub PR URL. The `github_fetcher_agent` fetches actual file contents — without a PR URL it has nothing to fetch, and all specialist assessments will be superficial defaults.
 
 ---
 
@@ -202,12 +218,13 @@ eng-governance/
 ├── app/
 │   ├── agent.py                  # Root orchestrator, ADK patches, and callbacks
 │   ├── agents/
-│   │   ├── security_agent.py     # Security risk assessment
-│   │   ├── architecture_agent.py # Design and scalability review
-│   │   ├── delivery_agent.py     # PR readiness and delivery risk
-│   │   ├── cost_agent.py         # Infrastructure cost estimation
-│   │   ├── evaluation_agent.py   # CI, review status, and test coverage
-│   │   └── _throttle.py          # asyncio.sleep callback between agents
+│   │   ├── github_fetcher_agent.py  # Fetches all GitHub data once; writes pr_context
+│   │   ├── security_agent.py        # Security risk assessment (reads {pr_context})
+│   │   ├── architecture_agent.py    # Design and scalability review (reads {pr_context})
+│   │   ├── delivery_agent.py        # PR readiness and delivery risk (reads {pr_context})
+│   │   ├── cost_agent.py            # Infrastructure cost estimation (reads {pr_context})
+│   │   ├── evaluation_agent.py      # CI, review status, test coverage (reads {pr_context})
+│   │   └── _throttle.py             # asyncio.sleep callback between agents
 │   ├── schemas/                  # Pydantic output schemas for all agents
 │   │   ├── security.py           # SecurityAssessment
 │   │   ├── architecture.py       # ArchitectureReview
