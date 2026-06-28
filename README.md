@@ -47,6 +47,35 @@ User request (GitHub PR URL or change description)
 └──────────────────────────────────────────────────────┘
 ```
 
+```mermaid
+flowchart TD
+    User([User Request]) --> Orch
+
+    subgraph Orch["cto_orchestrator · SequentialAgent"]
+        direction TB
+        F["1 · github_fetcher_agent\nGitHub MCP tools"] -->|pr_context written to state| S
+        S["2 · security_agent\nSecurityAssessment"] --> A
+        A["3 · architecture_agent\nArchitectureReview"] --> D
+        D["4 · delivery_agent\nDeliveryPlan"] --> C
+        C["5 · cost_agent\nCostAnalysis"] --> E
+        E["6 · evaluation_agent\nEvaluationReport"] --> CTO
+        CTO["7 · cto_synthesizer\nGovernanceDecision + HITL gate"]
+    end
+
+    subgraph MCP["GitHub MCP Server · @modelcontextprotocol/server-github"]
+        direction LR
+        T1[get_pull_request] --- T2[get_pull_request_files]
+        T2 --- T3[get_pull_request_reviews]
+        T3 --- T4[get_pull_request_status]
+        T4 --- T5[get_file_contents]
+    end
+
+    F <-->|stdio| MCP
+    CTO -->|requires_human_approval = True| H([Human Reviewer\nrequest_input])
+    H -->|named approval| CTO
+    CTO --> Out([GovernanceDecision\nAPPROVE · APPROVE_WITH_CONDITIONS · DEFER · REJECT])
+```
+
 The `github_fetcher_agent` runs first and is the **only agent that calls GitHub**. It fetches PR metadata, the changed file list, review status, CI status, and the contents of up to 15 source files, then writes a structured `pr_context` report to session state. All five specialists read from `{pr_context}` — they have no tools and complete in a single LLM call each. The `cto_synthesizer` reads all five structured outputs and produces a final `GovernanceDecision` with an `overall_recommendation` of `APPROVE`, `APPROVE_WITH_CONDITIONS`, `DEFER`, or `REJECT`.
 
 ---
