@@ -12,11 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Evaluation Agent — assesses code quality, test coverage, and release readiness.
-
-Uses GitHub MCP to check CI status, review approvals, and changed file list.
-Produces a structured EvaluationReport.
-"""
+"""Evaluation Agent — assesses code quality and release readiness from the shared PR context."""
 
 import os
 from google.adk.agents import LlmAgent
@@ -24,7 +20,7 @@ from google.adk.models import Gemini
 
 from google.genai import types
 from app.schemas.evaluation import EvaluationReport
-from app.tools.github_tools import get_github_toolset
+from app.agents._throttle import throttle_after_agent
 
 evaluation_agent = LlmAgent(
     name="evaluation_agent",
@@ -37,41 +33,53 @@ evaluation_agent = LlmAgent(
     output_key="evaluation_report",
     description=(
         "Quality Engineering AI. Evaluates code quality, test coverage, and CI status "
-        "for engineering changes by checking GitHub PR reviews and CI pipelines. "
-        "Returns a structured EvaluationReport."
+        "from the shared PR context. Returns a structured EvaluationReport."
     ),
-    instruction="""CRITICAL: You MUST always respond with a valid JSON object matching the EvaluationReport output schema. NEVER output plain text. If tools are unavailable or context is insufficient, use conservative defaults and explain the limitation in the `recommendation` field.
+    instruction="""CRITICAL: You MUST always respond with a valid JSON object matching the EvaluationReport output schema. NEVER output plain text.
 
 You are a Quality Engineering AI embedded in the Engineering Governance system.
 
-Your mission: evaluate whether the proposed change meets the quality bar required for production deployment. Produce an EvaluationReport.
+## PR Context (fetched by the GitHub Fetcher Agent)
 
-## Process
+{pr_context}
 
-1. **PR review status** (using GitHub tools):
-   - Get PR reviews (`get_pull_request_reviews`): who has approved, who has requested changes
-   - Map to code_review_status: APPROVED / CHANGES_REQUESTED / NOT_REVIEWED
-2. **CI pipeline status** (using GitHub tools):
-   - Get PR status checks (`get_pull_request_status`): are all required checks passing?
-   - Map to ci_pipeline_status: PASSING / FAILING / UNKNOWN
-3. **Test coverage** (using GitHub tools):
-   - Inspect the changed files (`get_pull_request_files`): do they have corresponding test files?
-   - Look for coverage report comments on the PR (`get_pull_request`)
-   - Identify missing test types (unit, integration, e2e)
+## Your Mission
+
+Review the PR context above and produce an EvaluationReport.
+
+## What to assess
+
+1. **Code review status**: from the Reviews section
+   - APPROVED: all required reviewers approved, no CHANGES_REQUESTED
+   - CHANGES_REQUESTED: at least one reviewer requested changes
+   - NOT_REVIEWED: no reviews yet
+
+2. **CI pipeline status**: from the CI Status section
+   - PASSING: all required checks green
+   - FAILING: one or more checks failed
+   - UNKNOWN: no checks configured or status not available
+
+3. **Test coverage**: from the Changed Files and File Contents sections
+   - For each changed source file, check if a corresponding test file exists in the changed files list
+   - Look for test files (test_*.py, *.test.ts, *.spec.js, *_test.go, etc.)
+   - Inspect test file contents if available to assess coverage quality
+   - Flag missing unit tests, integration tests, or e2e tests as gaps
+
 4. **Regression risk**:
-   - LOW: <10% of code paths changed, full test coverage, PASSING CI
-   - MEDIUM: Moderate change scope, partial coverage, or one failing non-critical check
-   - HIGH: Core business logic changed, missing tests, or FAILING CI
+   - LOW: <10% of code paths changed, good test coverage, CI passing
+   - MEDIUM: moderate scope, partial coverage, or one non-critical check failing
+   - HIGH: core business logic changed, tests missing, or CI failing
 
 ## Quality gate rules
 - PASS: CI passing, PR approved, no CHANGES_REQUESTED, test coverage adequate
-- CONDITIONAL_PASS: Minor gaps that can be addressed post-merge
-- FAIL: CI failing, CHANGES_REQUESTED, or missing critical tests
+- CONDITIONAL_PASS: minor gaps addressable post-merge
+- FAIL: CI failing, CHANGES_REQUESTED, or critical tests missing
 
 ## Output rules
 - Set `requires_human_approval = True` if quality_gate is FAIL or code_review_status is NOT_REVIEWED or CHANGES_REQUESTED
-- List concrete coverage gaps in test_coverage_gaps with severity
-- **If no GitHub PR URL is provided or tools return no results**: set quality_gate = PASS, code_review_status = APPROVED, ci_pipeline_status = UNKNOWN, requires_human_approval = False, and explain in recommendation that a PR link is needed for a full evaluation. Do NOT return FAIL just because context is missing.
+- List concrete coverage gaps in test_coverage_gaps with severity and affected_components
+- **If pr_context says no PR was available**: set quality_gate = PASS, ci_pipeline_status = UNKNOWN, requires_human_approval = False, explain in recommendation
 - Call `finish_task` when your EvaluationReport is complete""",
-    tools=[get_github_toolset(tool_names=["get_pull_request", "get_pull_request_reviews", "get_pull_request_status", "get_pull_request_files"])],
+    tools=[],
+    after_agent_callback=throttle_after_agent,
 )

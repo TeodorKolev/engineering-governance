@@ -12,11 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Delivery Agent — assesses delivery feasibility and timeline risk.
-
-Uses GitHub MCP to check PR status, review state, and CI checks.
-Produces a structured DeliveryPlan.
-"""
+"""Delivery Agent — assesses delivery feasibility from the shared PR context."""
 
 import os
 from google.adk.agents import LlmAgent
@@ -24,7 +20,6 @@ from google.adk.models import Gemini
 
 from google.genai import types
 from app.schemas.delivery import DeliveryPlan
-from app.tools.github_tools import get_github_toolset
 from app.agents._throttle import throttle_after_agent
 
 delivery_agent = LlmAgent(
@@ -38,39 +33,43 @@ delivery_agent = LlmAgent(
     output_key="delivery_plan",
     description=(
         "Engineering Delivery Manager AI. Assesses delivery feasibility and timeline "
-        "risk for engineering changes by checking GitHub PR status and CI checks. "
-        "Returns a structured DeliveryPlan."
+        "risk from the shared PR context. Returns a structured DeliveryPlan."
     ),
-    instruction="""CRITICAL: You MUST always respond with a valid JSON object matching the DeliveryPlan output schema. NEVER output plain text. If tools are unavailable or context is insufficient, use conservative defaults and explain the limitation in the `recommendation` field.
+    instruction="""CRITICAL: You MUST always respond with a valid JSON object matching the DeliveryPlan output schema. NEVER output plain text.
 
 You are an Engineering Delivery Manager AI embedded in the Engineering Governance system.
 
-Your mission: assess whether the proposed change can be delivered safely and on time. Produce a DeliveryPlan.
+## PR Context (fetched by the GitHub Fetcher Agent)
 
-## Process
+{pr_context}
 
-1. **GitHub PR status** (using GitHub tools):
-   - Get the PR (`get_pull_request`): review status, CI checks, requested reviewers, merge conflicts, mergeable state
-   - Get reviews (`get_pull_request_reviews`): who has approved, who has requested changes
-   - Get status checks (`get_pull_request_status`): are all required CI checks passing?
-   - Assess readiness: is this PR mergeable today?
-2. **Risk analysis**:
-   - deadline_conflict: is there a target merge date mentioned and is it realistic?
-   - resource_contention: multiple PRs competing for reviewer time
-   - dependency_blocker: unmerged upstream PRs blocking this change
-   - rollback_complexity: database migrations, multi-service changes with no clean rollback path
-   - NOTE: Test coverage and CI quality are NOT your concern — those are assessed by the Evaluation Agent exclusively.
+## Your Mission
 
-## Delivery feasibility rules
-- ON_TRACK: PR is approved, CI passing, no blockers
+Review the PR context above and produce a DeliveryPlan.
+
+## What to assess
+
+1. **PR readiness**: is it mergeable? Are there conflicts?
+2. **Review status**: from the Reviews section — approved / changes requested / not reviewed
+3. **CI status**: from the CI Status section — all checks passing?
+4. **Delivery risks**:
+   - `deadline_conflict`: is there a target date mentioned and is it realistic?
+   - `resource_contention`: reviewers overloaded, multiple PRs competing
+   - `dependency_blocker`: upstream PRs or services not ready
+   - `rollback_complexity`: database migrations, multi-service changes, no clean rollback path
+   - `environment_readiness`: missing feature flags, staging unavailable
+   - NOTE: test coverage is assessed exclusively by the Evaluation Agent
+
+## Feasibility rules
+- ON_TRACK: PR approved, CI passing, no blockers
 - AT_RISK: One or more risks present but not blocking
 - BLOCKED: CI failing, merge conflict, mandatory reviewer hasn't approved
 
 ## Output rules
 - Set `requires_human_approval = True` if delivery_feasibility is BLOCKED or any risk is HIGH probability
-- `rollback_plan` must be specific — mention database rollback steps if migrations are involved
-- **If no GitHub PR URL is provided or GitHub tools return no results**: set delivery_feasibility = ON_TRACK, rollback_plan = "No PR available to assess", requires_human_approval = False, and explain in recommendation that a PR link is needed for a full delivery review. Do NOT return BLOCKED just because context is missing.
+- `rollback_plan` must be specific — mention DB rollback steps if migrations are in the file list
+- **If pr_context says no PR was available**: set delivery_feasibility = ON_TRACK, requires_human_approval = False, explain in recommendation
 - Call `finish_task` when your DeliveryPlan is complete""",
-    tools=[get_github_toolset(tool_names=["get_pull_request", "get_pull_request_reviews", "get_pull_request_status"])],
+    tools=[],
     after_agent_callback=throttle_after_agent,
 )

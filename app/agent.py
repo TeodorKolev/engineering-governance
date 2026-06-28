@@ -39,6 +39,7 @@ from google.adk.tools import request_input
 from google.genai import types
 
 from app.agents import (
+    github_fetcher_agent,
     architecture_agent,
     cost_agent,
     delivery_agent,
@@ -183,7 +184,11 @@ async def save_original_input(callback_context) -> Optional[types.Content]:
     from app.schemas.cost import CostAnalysis
     from app.schemas.evaluation import EvaluationReport
 
-    # Seed defaults unconditionally so the synthesizer always has these keys.
+    # Seed defaults unconditionally so agents never hit a missing-variable KeyError.
+    callback_context.state.setdefault(
+        "pr_context",
+        "No GitHub PR was provided. Specialist agents should produce safe default assessments.",
+    )
     callback_context.state.setdefault(
         "security_assessment",
         SecurityAssessment(
@@ -438,6 +443,7 @@ Produce the final GovernanceDecision:
 root_agent = SequentialAgent(
     name="cto_orchestrator",
     sub_agents=[
+        github_fetcher_agent,   # fetches PR + files once; writes pr_context to state
         security_agent,
         architecture_agent,
         delivery_agent,

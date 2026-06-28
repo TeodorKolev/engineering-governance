@@ -12,11 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Architecture Agent — reviews engineering designs and system changes.
-
-Uses GitHub MCP to inspect code structure and module design.
-Produces a structured ArchitectureReview.
-"""
+"""Architecture Agent — reviews system design from the shared PR context."""
 
 import os
 from google.adk.agents import LlmAgent
@@ -24,7 +20,6 @@ from google.adk.models import Gemini
 
 from google.genai import types
 from app.schemas.architecture import ArchitectureReview
-from app.tools.github_tools import get_github_toolset
 from app.agents._throttle import throttle_after_agent
 
 architecture_agent = LlmAgent(
@@ -37,40 +32,42 @@ architecture_agent = LlmAgent(
     output_schema=ArchitectureReview,
     output_key="architecture_assessment",
     description=(
-        "Principal Architect AI. Reviews system design changes for architectural "
-        "soundness — scalability, reliability, maintainability, and alignment with "
-        "existing patterns. Returns a structured ArchitectureReview."
+        "Principal Architect AI. Reviews the shared PR context for architectural "
+        "soundness — scalability, reliability, maintainability, and design patterns. "
+        "Returns a structured ArchitectureReview."
     ),
-    instruction="""CRITICAL: You MUST always respond with a valid JSON object matching the ArchitectureReview output schema. NEVER output plain text. If tools are unavailable or context is insufficient, use conservative defaults and explain the limitation in the `recommendation` field.
+    instruction="""CRITICAL: You MUST always respond with a valid JSON object matching the ArchitectureReview output schema. NEVER output plain text.
 
 You are a Principal Software Architect AI embedded in the Engineering Governance system.
 
-Your mission: review the proposed engineering change from an architectural perspective and produce an ArchitectureReview.
+## PR Context (fetched by the GitHub Fetcher Agent)
 
-## Process
+{pr_context}
 
-1. **Understand the change**: Identify what system components are being added, modified, or removed.
-2. **Code structure review** (using GitHub tools):
-   - Fetch the PR (`get_pull_request`) for title/description, then list changed files (`get_pull_request_files`) to understand the scope and design
-   - Identify from file names, paths, and PR description: tight coupling, missing abstractions, violations of separation of concerns
-   - Check for synchronous patterns where async would be needed at scale
-3. **Dependency analysis**:
-   - Identify new external dependencies introduced and their maturity/license/maintenance status
-   - Flag circular dependencies or version conflicts
-4. **Scalability assessment**:
-   - Estimate how the change performs under 10x load
-   - Identify bottlenecks: N+1 queries, missing caching, synchronous fan-out
+## Your Mission
+
+Review the PR context above and produce an ArchitectureReview.
+
+## What to assess
+
+1. **Module and class design**: tight coupling, missing abstractions, violations of single responsibility
+2. **Separation of concerns**: business logic leaking into controllers/routes, direct DB access from wrong layer
+3. **API design**: consistency with existing patterns, breaking changes, missing versioning
+4. **Data model**: schema changes, migration safety, denormalisation trade-offs
+5. **Scalability**: N+1 queries, missing caching, synchronous calls in hot paths, missing pagination
+6. **Dependencies**: new external libraries — maturity, license, maintenance status, version conflicts
+7. **Observability**: missing logging, metrics, or tracing for new code paths
 
 ## Concern severity rules
-- HIGH: Fundamental design flaw that will cause failures at scale, or violates core architectural principles
-- MEDIUM: Suboptimal pattern that should be fixed before production
+- HIGH: Fundamental flaw causing failures at scale, violates core patterns (e.g. direct DB from frontend)
+- MEDIUM: Suboptimal pattern to fix before production (e.g. missing pagination, sync call in hot path)
 - LOW: Improvement suggestion, minor anti-pattern
 
 ## Output rules
-- Set `requires_human_approval = True` if overall_assessment is NEEDS_REWORK or any concern is HIGH severity
-- `design_pattern_alignment` should reference the actual patterns in the codebase (from GitHub inspection)
-- **If no GitHub PR URL is provided or tools return no results**: set overall_assessment = APPROVED, concerns = [], requires_human_approval = False, and explain in recommendation that a PR link is needed for a full architecture review. Do NOT flag concerns just because context is missing.
+- Set `requires_human_approval = True` if overall_assessment is NEEDS_REWORK or any concern is HIGH
+- `design_pattern_alignment` should reference patterns visible in the PR files
+- **If pr_context says no PR was available**: set overall_assessment = APPROVED, concerns = [], requires_human_approval = False, explain in recommendation
 - Call `finish_task` when your ArchitectureReview is complete""",
-    tools=[get_github_toolset(tool_names=["get_pull_request", "get_pull_request_files"], include_file_contents=False)],
+    tools=[],
     after_agent_callback=throttle_after_agent,
 )

@@ -14,6 +14,7 @@
 
 """Sub-agents package for the Engineering Governance system."""
 
+from app.agents.github_fetcher_agent import github_fetcher_agent
 from app.agents.architecture_agent import architecture_agent
 from app.agents.cost_agent import cost_agent
 from app.agents.delivery_agent import delivery_agent
@@ -21,6 +22,7 @@ from app.agents.evaluation_agent import evaluation_agent
 from app.agents.security_agent import security_agent
 
 __all__ = [
+    "github_fetcher_agent",
     "security_agent",
     "architecture_agent",
     "delivery_agent",

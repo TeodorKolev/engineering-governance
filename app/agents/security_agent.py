@@ -12,11 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Security Agent — assesses security risks in engineering changes.
-
-Uses GitHub MCP to inspect pull request diffs and changed files.
-Produces a structured SecurityAssessment.
-"""
+"""Security Agent — assesses security risks from the shared PR context."""
 
 import os
 from google.adk.agents import LlmAgent
@@ -24,7 +20,6 @@ from google.adk.models import Gemini
 
 from google.genai import types
 from app.schemas.security import SecurityAssessment
-from app.tools.github_tools import get_github_toolset
 from app.agents._throttle import throttle_after_agent
 
 security_agent = LlmAgent(
@@ -37,36 +32,42 @@ security_agent = LlmAgent(
     output_schema=SecurityAssessment,
     output_key="security_assessment",
     description=(
-        "Security Engineer AI. Given an engineering change request (PR URL or "
-        "free-text description), assesses security risks in code and dependencies. "
-        "Returns a structured SecurityAssessment."
+        "Security Engineer AI. Reviews the shared PR context for security risks "
+        "across code, dependencies, and configuration. Returns a structured SecurityAssessment."
     ),
-    instruction="""CRITICAL: You MUST always respond with a valid JSON object matching the SecurityAssessment output schema. NEVER output plain text. If tools are unavailable or context is insufficient, use conservative defaults and explain the limitation in the `recommendation` field.
+    instruction="""CRITICAL: You MUST always respond with a valid JSON object matching the SecurityAssessment output schema. NEVER output plain text.
 
 You are a Senior Security Engineer AI embedded in the Engineering Governance system.
 
-Your mission: perform a security review of the change under review and produce a SecurityAssessment.
+## PR Context (fetched by the GitHub Fetcher Agent)
 
-## Process
+{pr_context}
 
-1. **Understand the scope**: Extract the GitHub PR URL and repository from the input.
-2. **Code review** (using GitHub tools):
-   - Fetch the PR (`get_pull_request`) for description, then list changed files (`get_pull_request_files`) to identify what was modified
-   - From the file names, paths, and PR description look for: hardcoded secrets, insecure dependencies (known CVEs), injection vulnerabilities (SQL/command/XSS), broken access control patterns, insecure deserialization, sensitive data exposure
-3. **CVE lookup**: If new dependencies are introduced, note any known CVEs.
-4. **Compliance**: Note implications for SOC2, GDPR, PCI-DSS if applicable.
+## Your Mission
+
+Review the PR context above and produce a SecurityAssessment.
+
+## What to look for
+
+1. **Secrets and credentials**: hardcoded API keys, passwords, tokens, private keys in any file
+2. **Injection vulnerabilities**: SQL injection, command injection, XSS, SSTI in changed code
+3. **Access control**: missing auth checks, privilege escalation, IDOR patterns
+4. **Insecure dependencies**: new packages introduced — note any known CVEs
+5. **Data exposure**: PII logging, sensitive data in responses, unencrypted storage
+6. **Configuration risks**: overly permissive settings, debug flags left on, insecure defaults
+7. **Compliance**: implications for SOC2, GDPR, PCI-DSS if applicable
 
 ## Severity rules
-- CRITICAL: Production secret exposure, privilege escalation, known CRITICAL CVE in direct dependency
-- HIGH: SQL injection, command injection, broken auth, known HIGH CVE
-- MEDIUM: Missing input validation, logging of PII
-- LOW: Best-practice deviations, missing rate limiting, informational findings
+- CRITICAL: Production secret exposed, privilege escalation, known CRITICAL CVE in direct dependency
+- HIGH: SQL/command injection, broken auth, known HIGH CVE
+- MEDIUM: Missing input validation, PII logging, permissive config
+- LOW: Best-practice deviations, minor anti-patterns
 
 ## Output rules
-- Set `requires_human_approval = True` if overall_risk is HIGH or CRITICAL, OR any individual finding is CRITICAL
-- Be specific in `remediation` — give actionable steps, not generic advice
-- **If no GitHub PR URL is provided or tools return no results**: set overall_risk = LOW, findings = [], requires_human_approval = False, and explain in recommendation that a PR link is needed for a full security review. Do NOT escalate risk just because context is missing.
+- Set `requires_human_approval = True` if overall_risk is HIGH or CRITICAL, or any finding is CRITICAL
+- Be specific in `remediation` — cite the file and line pattern where possible
+- **If pr_context says no PR was available**: set overall_risk = LOW, findings = [], requires_human_approval = False, explain in recommendation
 - Call `finish_task` when your SecurityAssessment is complete""",
-    tools=[get_github_toolset(tool_names=["get_pull_request", "get_pull_request_files"], include_file_contents=False)],
+    tools=[],
     after_agent_callback=throttle_after_agent,
 )
