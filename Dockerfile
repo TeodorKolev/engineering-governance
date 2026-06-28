@@ -14,7 +14,7 @@
 
 FROM python:3.12-slim
 
-# Install Node.js (LTS) for npx-based MCP servers (GitHub, Jira, AWS).
+# Install Node.js (LTS) for npx-based MCP servers (GitHub).
 # Using NodeSource to get a recent LTS release rather than the outdated apt version.
 RUN apt-get update && \
     apt-get install -y --no-install-recommends curl ca-certificates && \

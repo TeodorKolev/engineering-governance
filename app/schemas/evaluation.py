@@ -42,7 +42,7 @@ class TestCoverageGap(BaseModel):
 
 
 class QualityMetric(BaseModel):
-    """A quality signal or metric from GitHub/Jira."""
+    """A quality signal or metric from GitHub."""
 
     metric_name: str = Field(description="Name of the quality metric (e.g. 'test coverage %').")
     current_value: str = Field(description="Current measured value.")
@@ -70,7 +70,7 @@ class EvaluationReport(BaseModel):
     )
     quality_metrics: list[QualityMetric] = Field(
         default_factory=list,
-        description="Key quality metrics collected from GitHub/Jira.",
+        description="Key quality metrics collected from GitHub.",
     )
     code_review_status: Literal["NOT_REVIEWED", "CHANGES_REQUESTED", "APPROVED"] = Field(
         description="GitHub PR review status."
@@ -80,7 +80,7 @@ class EvaluationReport(BaseModel):
     )
     open_bugs_count: int = Field(
         default=0,
-        description="Number of open bugs in Jira linked to this change.",
+        description="Number of open bugs linked to this change.",
     )
     regression_risk: Literal["LOW", "MEDIUM", "HIGH"] = Field(
         description="Risk of introducing regressions based on test coverage and scope."

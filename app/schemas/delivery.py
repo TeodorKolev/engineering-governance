@@ -55,10 +55,6 @@ class DeliveryPlan(BaseModel):
         default=None,
         description="Estimated merge/release date in ISO-8601 format (YYYY-MM-DD).",
     )
-    jira_tickets: list[str] = Field(
-        default_factory=list,
-        description="Linked Jira ticket keys (e.g. ENG-1234) relevant to this change.",
-    )
     open_pull_requests: list[str] = Field(
         default_factory=list,
         description="GitHub PR URLs that are open and blocking or related.",

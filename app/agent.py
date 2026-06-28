@@ -238,7 +238,7 @@ async def save_original_input(callback_context) -> Optional[types.Content]:
         is_change_request = bool(
             any(
                 keyword in text.lower()
-                for keyword in ["pr", "pull", "github", "jira", "aws", "commit", "review", "change", "architecture", "deploy"]
+                for keyword in ["pr", "pull", "github", "commit", "review", "change", "architecture", "deploy"]
             )
             or _re.search(r'\b[A-Z][A-Z0-9]+-\d+\b', text)  # Jira ticket IDs: KAN-1, ENG-42, SCRUM-100
         )
@@ -256,7 +256,7 @@ async def save_original_input(callback_context) -> Optional[types.Content]:
             ).model_dump()
             callback_context.state["delivery_plan"] = DeliveryPlan(
                 delivery_feasibility="ON_TRACK", risks=[], requires_human_approval=False,
-                rollback_plan="N/A", jira_tickets=[], recommendation=skip_note,
+                rollback_plan="N/A", recommendation=skip_note,
             ).model_dump()
             callback_context.state["cost_analysis"] = CostAnalysis(
                 cost_impact_level="NEGLIGIBLE", total_monthly_delta_usd=0.0,

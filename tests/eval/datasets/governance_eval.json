@@ -1,7 +1,7 @@
 [
   {
     "name": "low_risk_pr_approve",
-    "query": "Please review this engineering change: We're updating the README.md and adding a docstring to the UserService.get_user() method in our auth service. PR: https://github.com/acme/auth-service/pull/42. Jira: ENG-101.",
+    "query": "Please review this engineering change: We're updating the README.md and adding a docstring to the UserService.get_user() method in our auth service. PR: https://github.com/acme/auth-service/pull/42.",
     "expected_tool_use": [
       {"tool_name": "security_agent"},
       {"tool_name": "architecture_agent"},
@@ -13,7 +13,7 @@
   },
   {
     "name": "critical_security_reject",
-    "query": "Review this infrastructure change: We are making our main S3 bucket (prod-customer-data) publicly accessible by adding an s3:GetObject policy for '*'. This will allow our CDN to serve files directly. PR: https://github.com/acme/infra/pull/99. Jira: ENG-555.",
+    "query": "Review this infrastructure change: We are making our main S3 bucket (prod-customer-data) publicly accessible by adding an s3:GetObject policy for '*'. This will allow our CDN to serve files directly. PR: https://github.com/acme/infra/pull/99.",
     "expected_tool_use": [
       {"tool_name": "security_agent"},
       {"tool_name": "architecture_agent"},
@@ -26,7 +26,7 @@
   },
   {
     "name": "high_cost_impact_defer",
-    "query": "We want to upgrade our RDS PostgreSQL fleet from db.t3.micro (4 instances) to db.r6g.4xlarge to handle projected 10x traffic growth for the holiday season. Estimated cost impact is unknown. Jira: ENG-789.",
+    "query": "We want to upgrade our RDS PostgreSQL fleet from db.t3.micro (4 instances) to db.r6g.4xlarge to handle projected 10x traffic growth for the holiday season. Estimated cost impact is unknown.",
     "expected_tool_use": [
       {"tool_name": "security_agent"},
       {"tool_name": "architecture_agent"},
@@ -39,7 +39,7 @@
   },
   {
     "name": "blocked_delivery_defer",
-    "query": "We want to merge PR https://github.com/acme/payment-service/pull/201 which adds Stripe webhooks. The CI is failing due to a flaky integration test. The PR has 1 approval but 1 reviewer requested changes. Sprint ends in 2 days. Jira: PAY-123.",
+    "query": "We want to merge PR https://github.com/acme/payment-service/pull/201 which adds Stripe webhooks. The CI is failing due to a flaky integration test. The PR has 1 approval but 1 reviewer requested changes. Sprint ends in 2 days.",
     "expected_tool_use": [
       {"tool_name": "security_agent"},
       {"tool_name": "architecture_agent"},
@@ -52,7 +52,7 @@
   },
   {
     "name": "architecture_needs_rework",
-    "query": "We're adding a new feature to our monolith that directly accesses the Users database table from the Orders service code (bypassing the Users service API). The change adds 3 direct SQL queries in the orders controller. PR: https://github.com/acme/monolith/pull/315. Jira: ENG-920.",
+    "query": "We're adding a new feature to our monolith that directly accesses the Users database table from the Orders service code (bypassing the Users service API). The change adds 3 direct SQL queries in the orders controller. PR: https://github.com/acme/monolith/pull/315.",
     "expected_tool_use": [
       {"tool_name": "security_agent"},
       {"tool_name": "architecture_agent"},
