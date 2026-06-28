@@ -12,14 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""MCP tool factory functions for all integrations."""
+"""MCP tool factory functions."""
 
-from app.tools.aws_tools import get_aws_toolset
 from app.tools.github_tools import get_github_toolset
-from app.tools.jira_tools import get_jira_toolset
 
 __all__ = [
     "get_github_toolset",
-    "get_jira_toolset",
-    "get_aws_toolset",
 ]
