@@ -98,7 +98,7 @@ def _schema_fallback(schema, original_text: str) -> dict:
 
     if schema is DeliveryPlan:
         return DeliveryPlan(
-            delivery_feasibility="ON_TRACK", risks=[], jira_tickets=[],
+            delivery_feasibility="ON_TRACK", risks=[],
             rollback_plan="Unable to assess.", requires_human_approval=False,
             recommendation=note,
         ).model_dump(exclude_none=True)
@@ -204,7 +204,7 @@ async def save_original_input(callback_context) -> Optional[types.Content]:
     callback_context.state.setdefault(
         "delivery_plan",
         DeliveryPlan(
-            delivery_feasibility="ON_TRACK", risks=[], jira_tickets=[],
+            delivery_feasibility="ON_TRACK", risks=[],
             rollback_plan="Pending specialist review.",
             requires_human_approval=False,
             recommendation="Pending specialist review.",
@@ -240,7 +240,7 @@ async def save_original_input(callback_context) -> Optional[types.Content]:
                 keyword in text.lower()
                 for keyword in ["pr", "pull", "github", "commit", "review", "change", "architecture", "deploy"]
             )
-            or _re.search(r'\b[A-Z][A-Z0-9]+-\d+\b', text)  # Jira ticket IDs: KAN-1, ENG-42, SCRUM-100
+            or _re.search(r'\b[A-Z][A-Z0-9]+-\d+\b', text)  # ticket IDs: KAN-1, ENG-42, SCRUM-100
         )
         if not is_change_request:
             # Overwrite defaults with skip-labelled values, then skip execution.

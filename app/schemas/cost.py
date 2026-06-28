@@ -70,10 +70,6 @@ class CostAnalysis(BaseModel):
         default=None,
         description="Whether the projected cost increase is within the approved budget, if determinable.",
     )
-    jira_budget_ticket: str | None = Field(
-        default=None,
-        description="Jira ticket key for the associated budget approval, if found.",
-    )
     requires_human_approval: bool = Field(
         description=(
             "Must be True if cost_impact_level is HIGH or CRITICAL, "
